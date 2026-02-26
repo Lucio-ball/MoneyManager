@@ -1,5 +1,6 @@
 import os
 import json
+import calendar
 import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -85,6 +86,19 @@ def init_db() -> None:
                 payment_method TEXT,
                 note TEXT,
                 cancelled_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscription_charges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subscription_id INTEGER NOT NULL,
+                billing_date TEXT NOT NULL,
+                amount REAL NOT NULL,
+                transaction_id INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(subscription_id, billing_date)
             );
             """
         )
@@ -258,6 +272,189 @@ def _monthly_cost(amount: float, cycle: str) -> float:
     if cycle == "weekly":
         return round(amount * 52 / 12, 2)
     return round(amount, 2)
+
+
+def _add_months(base_date: date, months: int) -> date:
+    month_index = (base_date.month - 1) + months
+    target_year = base_date.year + month_index // 12
+    target_month = month_index % 12 + 1
+    target_day = min(base_date.day, calendar.monthrange(target_year, target_month)[1])
+    return date(target_year, target_month, target_day)
+
+
+def _next_billing_date(current_date: date, cycle: str) -> date:
+    if cycle == "weekly":
+        return current_date + timedelta(days=7)
+    if cycle == "monthly":
+        return _add_months(current_date, 1)
+    if cycle == "quarterly":
+        return _add_months(current_date, 3)
+    if cycle == "yearly":
+        return _add_months(current_date, 12)
+    return _add_months(current_date, 1)
+
+
+def _build_subscription_charge_transaction(subscription: dict, billing_date: date) -> dict:
+    return {
+        "amount": round(float(subscription["amount"]), 2),
+        "type": "expense",
+        "date": billing_date.isoformat(),
+        "category_main": subscription.get("category") or "其他",
+        "category_sub": "订阅扣费",
+        "tags": ["订阅", "自动扣费"],
+        "payment_method": subscription.get("payment_method") or None,
+        "note": f"[订阅自动扣费] {subscription.get('name', '')}",
+    }
+
+
+def _create_subscription_charge_if_needed(conn: sqlite3.Connection, subscription: dict, billing_date: date) -> bool:
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO subscription_charges (
+            subscription_id,
+            billing_date,
+            amount
+        ) VALUES (?, ?, ?)
+        """,
+        (
+            int(subscription["id"]),
+            billing_date.isoformat(),
+            round(float(subscription["amount"]), 2),
+        ),
+    )
+
+    charge_row = conn.execute(
+        """
+        SELECT id, transaction_id
+        FROM subscription_charges
+        WHERE subscription_id = ? AND billing_date = ?
+        """,
+        (int(subscription["id"]), billing_date.isoformat()),
+    ).fetchone()
+
+    if not charge_row:
+        return False
+
+    if charge_row["transaction_id"]:
+        return False
+
+    transaction = _build_subscription_charge_transaction(subscription, billing_date)
+    cursor = conn.execute(
+        """
+        INSERT INTO transactions (
+            amount,
+            type,
+            date,
+            category_main,
+            category_sub,
+            tags,
+            payment_method,
+            note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            transaction["amount"],
+            transaction["type"],
+            transaction["date"],
+            transaction["category_main"],
+            transaction["category_sub"],
+            json.dumps(transaction["tags"], ensure_ascii=False),
+            transaction["payment_method"],
+            transaction["note"],
+        ),
+    )
+
+    transaction_id = cursor.lastrowid
+    if transaction_id is None:
+        return False
+
+    conn.execute(
+        """
+        UPDATE subscription_charges
+        SET transaction_id = ?
+        WHERE id = ?
+        """,
+        (int(transaction_id), int(charge_row["id"])),
+    )
+    return True
+
+
+def process_due_subscription_charges(target_date: str | None = None) -> dict:
+    billing_day = _parse_date(target_date) if target_date else date.today()
+    if not billing_day:
+        billing_day = date.today()
+
+    created_transactions = 0
+    updated_subscriptions = 0
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method
+            FROM subscriptions
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+        for row in rows:
+            item = dict(row)
+            due_date = _parse_date(item.get("next_billing_date"))
+            if not due_date:
+                continue
+
+            charged_any = False
+            while due_date <= billing_day:
+                created = _create_subscription_charge_if_needed(conn, item, due_date)
+                if created:
+                    created_transactions += 1
+                charged_any = True
+                due_date = _next_billing_date(due_date, item.get("cycle") or "monthly")
+
+            if charged_any:
+                conn.execute(
+                    """
+                    UPDATE subscriptions
+                    SET next_billing_date = ?
+                    WHERE id = ?
+                    """,
+                    (due_date.isoformat(), int(item["id"])),
+                )
+                updated_subscriptions += 1
+
+        conn.commit()
+
+    return {
+        "processed_date": billing_day.isoformat(),
+        "created_transactions": created_transactions,
+        "updated_subscriptions": updated_subscriptions,
+    }
+
+
+def get_subscription_actual_charge_summary(month: str) -> dict:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(amount), 0) AS total_amount,
+                COUNT(*) AS charge_count
+            FROM subscription_charges
+            WHERE substr(billing_date, 1, 7) = ?
+            """,
+            (month,),
+        ).fetchone()
+
+    return {
+        "month": month,
+        "actual_charged_amount": round(float(row["total_amount"] or 0), 2),
+        "charge_count": int(row["charge_count"] or 0),
+    }
 
 
 def get_transactions_by_month(month: str) -> list[dict]:
@@ -879,6 +1076,17 @@ def get_subscription_monthly_cost_summary() -> dict:
     }
 
 
+def get_subscription_monthly_metrics(month: str) -> dict:
+    summary = get_subscription_monthly_cost_summary()
+    actual = get_subscription_actual_charge_summary(month)
+    return {
+        "month": month,
+        "estimated_monthly_cost": round(float(summary.get("total_monthly_cost", 0)), 2),
+        "actual_charged_amount": round(float(actual.get("actual_charged_amount", 0)), 2),
+        "actual_charge_count": int(actual.get("charge_count", 0)),
+    }
+
+
 def get_subscription_monthly_recap(month: str) -> dict:
     with get_connection() as conn:
         created_row = conn.execute(
@@ -930,10 +1138,14 @@ def get_subscription_monthly_recap(month: str) -> dict:
         next_month_upcoming.append(item)
 
     summary = get_subscription_monthly_cost_summary()
+    metrics = get_subscription_monthly_metrics(month)
 
     return {
         "month": month,
         "monthly_total_cost": summary["total_monthly_cost"],
+        "estimated_monthly_cost": metrics["estimated_monthly_cost"],
+        "actual_charged_amount": metrics["actual_charged_amount"],
+        "actual_charge_count": metrics["actual_charge_count"],
         "new_subscriptions": int(created_row["total"] or 0),
         "cancelled_subscriptions": int(cancelled_row["total"] or 0),
         "next_month_upcoming": next_month_upcoming,

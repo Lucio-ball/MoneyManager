@@ -56,7 +56,7 @@
         </form>
       </section>
 
-      <section class="kpi-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+      <section class="kpi-grid" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
           <article class="kpi-card">
             <div class="kpi-label">总支出</div>
             <div class="kpi-value expense mono">¥{{ '%.2f'|format(monthly_stats.total_expense) }}</div>
@@ -68,6 +68,14 @@
           <article class="kpi-card">
             <div class="kpi-label">结余</div>
             <div class="kpi-value mono">¥{{ '%.2f'|format(monthly_stats.balance) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">订阅折算成本</div>
+            <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.estimated_monthly_cost) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">订阅占比</div>
+            <div class="kpi-value mono">{{ '%.2f'|format(subscription_ratio) }}%</div>
           </article>
         </div>
       </section>

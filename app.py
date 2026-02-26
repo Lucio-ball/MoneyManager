@@ -19,12 +19,14 @@ from database import (
     get_recent_transactions,
     get_subscription_by_id,
     get_subscription_monthly_cost_summary,
+    get_subscription_monthly_metrics,
     get_tag_trend,
     get_today_expense,
     get_transactions_by_month,
     get_upcoming_subscriptions,
     init_db,
     list_subscriptions,
+    process_due_subscription_charges,
     update_subscription,
     upsert_budget,
 )
@@ -62,7 +64,7 @@ SUBSCRIPTION_CYCLE_OPTIONS = [
 
 
 def build_ai_prompt_template(month: str) -> str:
-    return f"""你是一名专业的个人财务教练，请基于我提供的月度财务数据，输出一份结构化复盘报告。\n\n【你的任务】\n1. 用简洁语言总结本月消费结构与现金流状态。\n2. 识别值得肯定的消费习惯（至少 2 条）。\n3. 识别需要警惕的问题（至少 2 条），并解释原因。\n4. 针对下月给出可执行建议（3-5 条，需具体可落地）。\n5. 对“冲动消费比例”和“学习投资比例”给出诊断结论。\n6. 结合订阅模块，点评订阅压力与取消/新增结构。\n\n【数据口径说明】\n- monthly_stats: 月度收支、类别统计、标签统计、每日支出\n- insights: 行为模式识别结果（异常高支出日、长期高占比类别、冲动/学习投资比例）\n- budgets: 预算执行与状态（正常/接近/超支）\n- subscriptions: 订阅口径（本月订阅总成本、本月新增/取消、下月即将扣费项目）\n\n【输出格式（严格按此结构）】\n# {month} 财务复盘\n## 1) 本月概览\n## 2) 消费结构分析\n## 3) 行为模式解读\n## 4) 预算执行评价\n## 5) 订阅健康度\n## 6) 下月行动清单\n\n请使用中文输出，避免空泛建议，尽量引用数据中的金额、占比、趋势。"""
+    return f"""你是一名专业的个人财务教练，请基于我提供的月度财务数据，输出一份结构化复盘报告。\n\n【你的任务】\n1. 用简洁语言总结本月消费结构与现金流状态。\n2. 识别值得肯定的消费习惯（至少 2 条）。\n3. 识别需要警惕的问题（至少 2 条），并解释原因。\n4. 针对下月给出可执行建议（3-5 条，需具体可落地）。\n5. 对“冲动消费比例”和“学习投资比例”给出诊断结论。\n6. 结合订阅模块，分别从“结构成本”和“真实现金流”点评订阅压力。\n\n【数据口径说明】\n- monthly_stats: 月度收支、类别统计、标签统计、每日支出（仅真实入账）\n- insights: 行为模式识别结果（异常高支出日、长期高占比类别、冲动/学习投资比例）\n- budgets: 预算执行与状态（正常/接近/超支）\n- subscriptions: 订阅口径（本月折算成本、本月实际扣费金额、本月新增/取消、下月即将扣费项目）\n\n【输出格式（严格按此结构）】\n# {month} 财务复盘\n## 1) 本月概览\n## 2) 消费结构分析\n## 3) 行为模式解读\n## 4) 预算执行评价\n## 5) 订阅健康度\n## 6) 下月行动清单\n\n请使用中文输出，避免空泛建议，尽量引用数据中的金额、占比、趋势。"""
 
 
 def _build_subscription_payload(data: dict) -> dict | None:
@@ -162,6 +164,10 @@ def create_app() -> Flask:
 
     init_db()
 
+    @app.before_request
+    def sync_due_subscription_charges():
+        process_due_subscription_charges()
+
     @app.route("/")
     def index():
         category_palette = ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#EF4444"]
@@ -181,6 +187,7 @@ def create_app() -> Flask:
         ]
         emotion_light = build_emotion_light(month, monthly_stats.get("total_expense", 0), budget_data)
         subscription_summary = get_subscription_monthly_cost_summary()
+        subscription_metrics = get_subscription_monthly_metrics(month)
         subscription_upcoming = get_upcoming_subscriptions(days=7)[:3]
 
         return render_template(
@@ -194,6 +201,7 @@ def create_app() -> Flask:
             top_categories=top_categories,
             emotion_light=emotion_light,
             subscription_summary=subscription_summary,
+            subscription_metrics=subscription_metrics,
             subscription_upcoming=subscription_upcoming,
         )
 
@@ -241,6 +249,14 @@ def create_app() -> Flask:
         category_trend = get_category_trend(category_name, month)
         tag_trend = get_tag_trend(tag_name, month)
         insights = get_monthly_insights(month)
+        subscription_metrics = get_subscription_monthly_metrics(month)
+        subscription_ratio = 0.0
+        if monthly_stats.get("total_expense", 0) > 0:
+            subscription_ratio = (
+                subscription_metrics.get("estimated_monthly_cost", 0)
+                / monthly_stats.get("total_expense", 0)
+                * 100
+            )
 
         return render_template(
             "analysis.html",
@@ -254,6 +270,8 @@ def create_app() -> Flask:
             category_trend=category_trend,
             tag_trend=tag_trend,
             insights=insights,
+            subscription_metrics=subscription_metrics,
+            subscription_ratio=round(subscription_ratio, 2),
         )
 
     @app.route("/budget", methods=["GET", "POST"])
@@ -296,6 +314,7 @@ def create_app() -> Flask:
         ai_package = get_ai_monthly_package(month)
         ai_prompt_template = build_ai_prompt_template(month)
         archives = get_ai_archives(month)
+        subscription_metrics = get_subscription_monthly_metrics(month)
 
         return render_template(
             "ai.html",
@@ -305,6 +324,7 @@ def create_app() -> Flask:
             ai_package=ai_package,
             ai_prompt_template=ai_prompt_template,
             archives=archives,
+            subscription_metrics=subscription_metrics,
         )
 
     @app.route("/subscriptions")
@@ -461,7 +481,12 @@ def create_app() -> Flask:
 
     @app.route("/api/subscriptions/monthly_cost", methods=["GET"])
     def subscriptions_monthly_cost_api():
-        return jsonify(get_subscription_monthly_cost_summary())
+        month = request.args.get("month") or date.today().strftime("%Y-%m")
+        summary = get_subscription_monthly_cost_summary()
+        metrics = get_subscription_monthly_metrics(month)
+        response = dict(summary)
+        response.update(metrics)
+        return jsonify(response)
 
     @app.route("/api/subscriptions/<int:subscription_id>", methods=["DELETE"])
     def delete_subscription_api(subscription_id: int):
@@ -493,6 +518,9 @@ def create_app() -> Flask:
         subscription_recap = package.get("subscriptions", {})
         response = dict(package)
         response["subscription_monthly_total_cost"] = subscription_recap.get("monthly_total_cost", 0)
+        response["subscription_estimated_monthly_cost"] = subscription_recap.get("estimated_monthly_cost", 0)
+        response["subscription_actual_charged_amount"] = subscription_recap.get("actual_charged_amount", 0)
+        response["subscription_actual_charge_count"] = subscription_recap.get("actual_charge_count", 0)
         response["subscription_new_this_month"] = subscription_recap.get("new_subscriptions", 0)
         response["subscription_cancelled_this_month"] = subscription_recap.get("cancelled_subscriptions", 0)
         response["subscription_next_month_upcoming"] = subscription_recap.get("next_month_upcoming", [])

@@ -115,7 +115,8 @@
             <article class="panel">
               <h2 class="page-title" style="font-size: 18px;">订阅提醒</h2>
               <div class="kpi-label" style="margin-top: 8px;">
-                月成本折算：<span class="mono">¥{{ '%.2f'|format(subscription_summary.total_monthly_cost) }}</span>
+                本月预计订阅成本：<span class="mono">¥{{ '%.2f'|format(subscription_metrics.estimated_monthly_cost) }}</span>
+                ｜ 本月实际订阅扣费：<span class="mono">¥{{ '%.2f'|format(subscription_metrics.actual_charged_amount) }}</span>
                 ｜ 未来 7 天：{{ subscription_summary.upcoming_count }} 项
               </div>
               {% if subscription_upcoming %}

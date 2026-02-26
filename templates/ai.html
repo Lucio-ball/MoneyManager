@@ -36,6 +36,16 @@
       <section class="panel">
         <h1 class="page-title">AI 月度复盘</h1>
         <div class="page-subtitle">当前月份：{{ month }}</div>
+        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
+          <article class="kpi-card">
+            <div class="kpi-label">本月订阅折算成本（结构分析）</div>
+            <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.estimated_monthly_cost) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">本月实际订阅扣费（现金流分析）</div>
+            <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.actual_charged_amount) }}</div>
+          </article>
+        </div>
       </section>
 
       <section class="panel">
