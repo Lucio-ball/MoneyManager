@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>记账 - 个人财务分析系统</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f9fc;
+        color: #1f2937;
+      }
+      .container {
+        max-width: 980px;
+        margin: 32px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        margin-bottom: 16px;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .header a {
+        color: #2563eb;
+        text-decoration: none;
+      }
+      form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .full {
+        grid-column: 1 / -1;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 6px;
+      }
+      input,
+      select,
+      button {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      select[multiple] {
+        min-height: 110px;
+      }
+      .inline-hint {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 4px;
+      }
+      .btn {
+        background: #2563eb;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+      .msg {
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        font-size: 14px;
+      }
+      .ok {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .err {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: top;
+      }
+      .income {
+        color: #16a34a;
+        font-weight: 600;
+      }
+      .expense {
+        color: #dc2626;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="card header">
+        <h1>快速记账</h1>
+        <div>
+          <a href="/">返回首页</a>
+          &nbsp;|&nbsp;
+          <a href="/analysis">查看分析</a>
+          &nbsp;|&nbsp;
+          <a href="/budget">预算</a>
+          &nbsp;|&nbsp;
+          <a href="/ai">AI复盘</a>
+        </div>
+      </section>
+
+      <section class="card">
+        {% if success == '1' %}
+        <div class="msg ok">记账成功，表单已重置。</div>
+        {% elif success == '0' %}
+        <div class="msg err">提交失败：请至少填写金额和主类别。</div>
+        {% endif %}
+
+        <form id="add-transaction" method="post" action="/add">
+          <div>
+            <label for="amount">金额</label>
+            <input id="amount" type="number" step="0.01" min="0.01" name="amount" placeholder="金额" required />
+          </div>
+
+          <div>
+            <label for="type">类型</label>
+            <select id="type" name="type">
+              <option value="expense" selected>支出</option>
+              <option value="income">收入</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="date">日期</label>
+            <input id="date" type="date" name="date" value="{{ today }}" />
+          </div>
+
+          <div>
+            <label for="category_main">主类别</label>
+            <select id="category_main" name="category_main" required>
+              <option value="">请选择主类别</option>
+              {% for category in category_options %}
+              <option value="{{ category }}">{{ category }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="category_sub">子类别</label>
+            <input id="category_sub" type="text" name="category_sub" placeholder="如：外卖 / 奶茶 / 书籍" />
+          </div>
+
+          <div>
+            <label for="payment_method">支付方式</label>
+            <select id="payment_method" name="payment_method">
+              <option value="wechat">微信</option>
+              <option value="alipay_family">支付宝亲密付</option>
+              <option value="bank">银行卡</option>
+            </select>
+          </div>
+
+          <div class="full">
+            <label for="tags">标签（可多选）</label>
+            <select id="tags" name="tags" multiple>
+              {% for tag in tag_options %}
+              <option value="{{ tag }}">{{ tag }}</option>
+              {% endfor %}
+            </select>
+            <div class="inline-hint">按住 Ctrl（Windows）可多选</div>
+          </div>
+
+          <div class="full">
+            <label for="note">备注（可选）</label>
+            <input id="note" type="text" name="note" placeholder="备注（可选）" />
+          </div>
+
+          <div class="full">
+            <button class="btn" type="submit">记一笔</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>最近记录（10 笔）</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>类型</th>
+              <th>金额</th>
+              <th>类别</th>
+              <th>标签</th>
+              <th>支付方式</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if recent_records %}
+              {% for row in recent_records %}
+              <tr>
+                <td>{{ row.date }}</td>
+                <td>{{ '支出' if row.type == 'expense' else '收入' }}</td>
+                <td class="{{ row.type }}">¥{{ '%.2f'|format(row.amount) }}</td>
+                <td>{{ row.category_main }}{% if row.category_sub %} / {{ row.category_sub }}{% endif %}</td>
+                <td>{{ row.tags | join('、') if row.tags else '-' }}</td>
+                <td>
+                  {% if row.payment_method == 'wechat' %}
+                    微信
+                  {% elif row.payment_method == 'alipay_family' %}
+                    支付宝亲密付
+                  {% elif row.payment_method == 'bank' %}
+                    银行卡
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>{{ row.note if row.note else '-' }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+            <tr>
+              <td colspan="7">暂无记录，先记第一笔吧。</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>分析页面 - 个人财务分析系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f9fc;
+        color: #1f2937;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 28px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        margin-bottom: 16px;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .nav {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 9px 12px;
+        border-radius: 8px;
+        background: #2563eb;
+        color: #fff;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      input,
+      select {
+        padding: 9px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .summary-item {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .title {
+        color: #64748b;
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      .value {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .income {
+        color: #16a34a;
+      }
+      .expense {
+        color: #dc2626;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 16px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 9px 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      h1,
+      h2,
+      h3 {
+        margin: 0 0 12px;
+      }
+      .sub-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .empty {
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="card topbar">
+        <div>
+          <h1>分析页面</h1>
+          <div>月份：{{ month }}</div>
+        </div>
+        <div class="nav">
+          <a class="btn" href="/">首页</a>
+          <a class="btn" href="/add">记账</a>
+          <a class="btn" href="/budget">预算</a>
+          <a class="btn" href="/ai">AI复盘</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <form class="filters" method="get" action="/analysis">
+          <input type="month" name="month" value="{{ month }}" />
+          <select name="category">
+            {% for category in category_options %}
+            <option value="{{ category }}" {% if category == category_name %}selected{% endif %}>{{ category }}</option>
+            {% endfor %}
+          </select>
+          <select name="tag">
+            {% for tag in tag_options %}
+            <option value="{{ tag }}" {% if tag == tag_name %}selected{% endif %}>{{ tag }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn" type="submit">更新分析</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>月度分析</h2>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="title">总支出</div>
+            <div class="value expense">¥{{ '%.2f'|format(monthly_stats.total_expense) }}</div>
+          </div>
+          <div class="summary-item">
+            <div class="title">总收入</div>
+            <div class="value income">¥{{ '%.2f'|format(monthly_stats.total_income) }}</div>
+          </div>
+          <div class="summary-item">
+            <div class="title">结余</div>
+            <div class="value">¥{{ '%.2f'|format(monthly_stats.balance) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="card">
+          <h3>类别统计（金额 + 占比）</h3>
+          {% if monthly_stats.category_stats %}
+          <table>
+            <thead>
+              <tr>
+                <th>类别</th>
+                <th>金额</th>
+                <th>占比</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in monthly_stats.category_stats %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td>¥{{ '%.2f'|format(item.amount) }}</td>
+                <td>{{ '%.2f'|format(item.ratio) }}%</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="empty">当前月份暂无类别支出数据。</div>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h3>标签统计（金额 + 占比）</h3>
+          {% if monthly_stats.tag_stats %}
+          <table>
+            <thead>
+              <tr>
+                <th>标签</th>
+                <th>金额</th>
+                <th>占比</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in monthly_stats.tag_stats %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td>¥{{ '%.2f'|format(item.amount) }}</td>
+                <td>{{ '%.2f'|format(item.ratio) }}%</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="empty">当前月份暂无标签支出数据。</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="sub-grid">
+        <div class="card">
+          <h3>类别趋势（最近 3 个月）- {{ category_name }}</h3>
+          <canvas id="categoryTrendChart" height="140"></canvas>
+        </div>
+        <div class="card">
+          <h3>标签趋势（最近 3 个月）- {{ tag_name }}</h3>
+          <canvas id="tagTrendChart" height="140"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>行为模式识别</h2>
+        <p>
+          冲动消费比例：{{ '%.2f'|format(insights.impulsive_spending_ratio.ratio) }}%（¥{{ '%.2f'|format(insights.impulsive_spending_ratio.amount) }}）
+          ｜ 学习投资比例：{{ '%.2f'|format(insights.learning_investment_ratio.ratio) }}%（¥{{ '%.2f'|format(insights.learning_investment_ratio.amount) }}）
+        </p>
+
+        <h3>异常高支出日</h3>
+        {% if insights.abnormal_high_expense_days %}
+        <ul>
+          {% for item in insights.abnormal_high_expense_days %}
+          <li>{{ item.date }}：¥{{ '%.2f'|format(item.amount) }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty">本月暂无异常高支出日。</div>
+        {% endif %}
+
+        <h3>长期高占比类别（最近 3 个月）</h3>
+        {% if insights.long_term_high_ratio_categories %}
+        <ul>
+          {% for item in insights.long_term_high_ratio_categories %}
+          <li>{{ item.category }}：{{ item.ratios | join('% / ') }}%</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty">暂无连续 3 个月高占比类别。</div>
+        {% endif %}
+      </section>
+    </main>
+
+    <script id="analysis-data" type="application/json">
+      {{ {'category_trend': category_trend, 'tag_trend': tag_trend} | tojson }}
+    </script>
+
+    <script>
+      const dataElement = document.getElementById("analysis-data");
+      const analysisData = dataElement
+        ? JSON.parse(dataElement.textContent)
+        : { category_trend: { trend: [] }, tag_trend: { trend: [] } };
+
+      const categoryTrend = analysisData.category_trend?.trend || [];
+      const tagTrend = analysisData.tag_trend?.trend || [];
+
+      new Chart(document.getElementById("categoryTrendChart"), {
+        type: "line",
+        data: {
+          labels: categoryTrend.map((item) => item.month),
+          datasets: [
+            {
+              label: "类别支出",
+              data: categoryTrend.map((item) => item.amount),
+              borderColor: "#2563eb",
+              backgroundColor: "rgba(37, 99, 235, 0.2)",
+              fill: true,
+              tension: 0.25,
+            },
+          ],
+        },
+      });
+
+      new Chart(document.getElementById("tagTrendChart"), {
+        type: "line",
+        data: {
+          labels: tagTrend.map((item) => item.month),
+          datasets: [
+            {
+              label: "标签支出",
+              data: tagTrend.map((item) => item.amount),
+              borderColor: "#7c3aed",
+              backgroundColor: "rgba(124, 58, 237, 0.2)",
+              fill: true,
+              tension: 0.25,
+            },
+          ],
+        },
+      });
+    </script>
+  </body>
+</html>

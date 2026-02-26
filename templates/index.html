@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>个人财务分析系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f9fc;
+        color: #1f2937;
+      }
+      .container {
+        max-width: 1080px;
+        margin: 32px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        margin-bottom: 16px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .month-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      h1 {
+        margin-top: 0;
+        margin-bottom: 8px;
+      }
+      h2 {
+        margin: 0 0 12px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 14px;
+        border-radius: 8px;
+        background: #2563eb;
+        color: #fff;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      input[type="month"] {
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .summary-item {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px;
+      }
+      .summary-title {
+        color: #64748b;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      .summary-value {
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .income {
+        color: #16a34a;
+      }
+      .expense {
+        color: #dc2626;
+      }
+      .charts-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 16px;
+      }
+      .highlights-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .emotion-light {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .dot.green {
+        background: #22c55e;
+      }
+      .dot.yellow {
+        background: #f59e0b;
+      }
+      .dot.red {
+        background: #ef4444;
+      }
+      .top-list {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .top-list li {
+        margin-bottom: 6px;
+      }
+      .empty {
+        font-size: 14px;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="card topbar">
+        <div>
+          <h1>首页仪表盘</h1>
+          <div>当前月份：{{ month }}</div>
+        </div>
+        <div class="month-form">
+          <form method="get" action="/">
+            <input type="month" name="month" value="{{ month }}" />
+            <button class="btn" type="submit">查看</button>
+          </form>
+          <a class="btn" href="/add">去记账</a>
+          <a class="btn" href="/analysis">看分析</a>
+          <a class="btn" href="/budget">预算</a>
+          <a class="btn" href="/ai">AI复盘</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="summary-title">本月总支出</div>
+            <div class="summary-value expense">¥{{ '%.2f'|format(summary.total_expense) }}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-title">本月总收入</div>
+            <div class="summary-value income">¥{{ '%.2f'|format(summary.total_income) }}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-title">本月结余</div>
+            <div class="summary-value">¥{{ '%.2f'|format(summary.balance) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="highlights-grid">
+        <div class="card">
+          <h2>今日支出</h2>
+          <div class="summary-value expense">¥{{ '%.2f'|format(today_expense) }}</div>
+        </div>
+
+        <div class="card">
+          <h2>本月前三类别</h2>
+          {% if top_categories %}
+          <ol class="top-list">
+            {% for item in top_categories %}
+            <li>{{ item.name }}：¥{{ '%.2f'|format(item.amount) }}（{{ '%.2f'|format(item.ratio) }}%）</li>
+            {% endfor %}
+          </ol>
+          {% else %}
+          <div class="empty">暂无类别数据。</div>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h2>情绪灯</h2>
+          <div class="emotion-light">
+            <span class="dot {{ emotion_light.level }}"></span>
+            <span>{{ emotion_light.label }}</span>
+          </div>
+          <p class="empty">{{ emotion_light.reason }}</p>
+        </div>
+      </section>
+
+      <section class="charts-grid">
+        <div class="card">
+          <h2>每日支出折线图</h2>
+          {% if daily_expense %}
+          <canvas id="dailyExpenseChart" height="120"></canvas>
+          {% else %}
+          <div class="empty">该月份暂无支出数据。</div>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h2>类别占比饼图</h2>
+          {% if category_share %}
+          <canvas id="categoryPieChart" height="220"></canvas>
+          {% else %}
+          <div class="empty">该月份暂无类别数据。</div>
+          {% endif %}
+        </div>
+      </section>
+    </main>
+
+    <script id="dashboard-data" type="application/json">
+      {{ {'daily_expense': daily_expense, 'category_share': category_share} | tojson }}
+    </script>
+
+    <script>
+      const dashboardDataElement = document.getElementById("dashboard-data");
+      const dashboardData = dashboardDataElement
+        ? JSON.parse(dashboardDataElement.textContent)
+        : { daily_expense: [], category_share: [] };
+
+      const dailyExpense = dashboardData.daily_expense || [];
+      const categoryShare = dashboardData.category_share || [];
+
+      if (dailyExpense.length > 0) {
+        const dailyCtx = document.getElementById("dailyExpenseChart");
+        new Chart(dailyCtx, {
+          type: "line",
+          data: {
+            labels: dailyExpense.map((item) => item.date),
+            datasets: [
+              {
+                label: "每日支出",
+                data: dailyExpense.map((item) => item.amount),
+                borderColor: "#2563eb",
+                backgroundColor: "rgba(37, 99, 235, 0.2)",
+                tension: 0.25,
+                fill: true,
+              },
+            ],
+          },
+        });
+      }
+
+      if (categoryShare.length > 0) {
+        const pieCtx = document.getElementById("categoryPieChart");
+        new Chart(pieCtx, {
+          type: "pie",
+          data: {
+            labels: categoryShare.map((item) => item.category),
+            datasets: [
+              {
+                data: categoryShare.map((item) => item.amount),
+                backgroundColor: [
+                  "#2563eb",
+                  "#0ea5e9",
+                  "#22c55e",
+                  "#f59e0b",
+                  "#ef4444",
+                  "#a855f7",
+                  "#14b8a6",
+                  "#84cc16",
+                ],
+              },
+            ],
+          },
+        });
+      }
+    </script>
+  </body>
+</html>
