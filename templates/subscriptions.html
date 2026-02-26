@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoneyManager · 订阅管理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header class="top-nav app-shell">
+      <div class="top-nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-dot"></span>
+          <span>MoneyManager</span>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
+          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
+          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
+          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
+          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn-secondary" href="/">回到仪表盘</a>
+          <a class="btn" href="/subscriptions/add">新增订阅</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <div class="page">
+        <section class="panel">
+          <h1 class="page-title">订阅管理</h1>
+          <div class="page-subtitle">统一查看月成本、即将扣费与到期风险</div>
+        </section>
+
+        {% if success == 'created' %}
+        <section class="panel"><div class="msg ok">订阅创建成功。</div></section>
+        {% elif success == 'updated' %}
+        <section class="panel"><div class="msg ok">订阅更新成功。</div></section>
+        {% endif %}
+
+        <section class="kpi-grid">
+          <article class="kpi-card">
+            <div class="kpi-label">订阅月折算总成本</div>
+            <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.total_monthly_cost) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">订阅总数</div>
+            <div class="kpi-value mono">{{ summary.total_count }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">未来 7 天即将扣费</div>
+            <div class="kpi-value mono">{{ summary.upcoming_count }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">已过期项目</div>
+            <div class="kpi-value mono">{{ summary.expired_count }}</div>
+          </article>
+        </section>
+
+        <section class="grid-2">
+          <article class="panel">
+            <h2 class="page-title" style="font-size: 18px;">订阅周期分布</h2>
+            {% if summary.total_count > 0 %}
+            <canvas id="subscriptionCycleChart" height="180" style="margin-top: 12px;"></canvas>
+            {% else %}
+            <div class="helper-text">暂无订阅数据。</div>
+            {% endif %}
+          </article>
+          <article class="panel">
+            <h2 class="page-title" style="font-size: 18px;">月折算成本 TOP 5</h2>
+            {% if summary.top_monthly_cost %}
+            <canvas id="subscriptionTopCostChart" height="180" style="margin-top: 12px;"></canvas>
+            {% else %}
+            <div class="helper-text">暂无可展示的成本排行。</div>
+            {% endif %}
+          </article>
+        </section>
+
+        <section class="panel">
+          <h2 class="page-title" style="font-size: 18px;">未来 7 天扣费提醒</h2>
+          {% if upcoming %}
+          <div class="category-list" style="margin-top: 10px;">
+            {% for item in upcoming %}
+            <div class="category-item">
+              <div class="category-main">
+                <div class="category-name">{{ item.name }}</div>
+                <div class="small">{{ item.next_billing_date }} · {{ cycle_labels[item.cycle] }}</div>
+              </div>
+              <div class="mono" style="text-align: right;">
+                <div>¥{{ '%.2f'|format(item.amount) }}</div>
+                <div class="small">月折算 ¥{{ '%.2f'|format(item.monthly_cost) }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="helper-text">未来 7 天暂无订阅扣费。</div>
+          {% endif %}
+        </section>
+
+        <section class="panel">
+          <h2 class="page-title" style="font-size: 18px;">订阅列表</h2>
+          {% if subscriptions %}
+          <div class="subscription-grid" style="margin-top: 10px;">
+            {% for item in subscriptions %}
+            <article class="subscription-card" id="subscription-card-{{ item.id }}">
+              <div class="subscription-head">
+                <div>
+                  <div class="subscription-name">{{ item.name }}</div>
+                  <div class="small">
+                    {{ cycle_labels[item.cycle] }} · 下次扣费 {{ item.next_billing_date }}
+                  </div>
+                </div>
+                <div>
+                  {% if item.is_expired %}
+                  <span class="badge danger">已过期</span>
+                  {% elif item.is_upcoming %}
+                  <span class="badge warn">即将扣费</span>
+                  {% else %}
+                  <span class="badge ok">正常</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="subscription-meta">
+                <div>账单金额 <span class="mono">¥{{ '%.2f'|format(item.amount) }}</span></div>
+                <div>月折算 <span class="mono">¥{{ '%.2f'|format(item.monthly_cost) }}</span></div>
+                <div>分类 {{ item.category if item.category else '-' }}</div>
+                <div>支付方式 {{ item.payment_method if item.payment_method else '-' }}</div>
+                <div>备注 {{ item.note if item.note else '-' }}</div>
+              </div>
+              <div class="toolbar" style="margin-top: 12px;">
+                <a class="btn-secondary" href="/subscriptions/edit/{{ item.id }}">编辑</a>
+                <button class="btn-danger delete-subscription-btn" type="button" data-id="{{ item.id }}" data-name="{{ item.name }}">取消订阅</button>
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="helper-text">暂无订阅，先新增一个试试。</div>
+          {% endif %}
+        </section>
+      </div>
+    </main>
+
+    <script id="subscription-dashboard-data" type="application/json">
+      {{ {'summary': summary, 'subscriptions': subscriptions} | tojson }}
+    </script>
+    <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
+  </body>
+</html>

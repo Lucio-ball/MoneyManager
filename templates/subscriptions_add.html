@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoneyManager · 新增订阅</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+  </head>
+  <body>
+    <header class="top-nav app-shell">
+      <div class="top-nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-dot"></span>
+          <span>MoneyManager</span>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
+          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
+          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
+          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
+          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn-secondary" href="/subscriptions">返回订阅列表</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <div class="page">
+        <section class="panel">
+          <h1 class="page-title">新增订阅</h1>
+          <div class="page-subtitle">添加你正在使用的服务订阅，并自动折算月成本</div>
+        </section>
+
+        <section class="panel">
+          {% if success == '0' %}
+          <div class="msg danger">提交失败：请检查名称、金额、周期和扣费日期。</div>
+          {% endif %}
+
+          <form method="post" action="/subscriptions/add" class="grid-2">
+            <div>
+              <label class="small" for="name">订阅名称</label>
+              <input id="name" type="text" name="name" placeholder="如：Notion / 网易云音乐" required />
+            </div>
+
+            <div>
+              <label class="small" for="amount">账单金额</label>
+              <input id="amount" type="number" step="0.01" min="0.01" name="amount" placeholder="金额" required />
+            </div>
+
+            <div>
+              <label class="small" for="cycle">扣费周期</label>
+              <select id="cycle" name="cycle" required>
+                {% for cycle in cycle_options %}
+                <option value="{{ cycle }}" {% if cycle == 'monthly' %}selected{% endif %}>
+                  {% if cycle == 'monthly' %}月付{% elif cycle == 'yearly' %}年付{% elif cycle == 'weekly' %}周付{% else %}季付{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label class="small" for="next_billing_date">下次扣费日期</label>
+              <input id="next_billing_date" type="date" name="next_billing_date" value="{{ today }}" required />
+            </div>
+
+            <div>
+              <label class="small" for="category">分类</label>
+              <input id="category" type="text" name="category" placeholder="如：效率 / 娱乐 / 云服务" />
+            </div>
+
+            <div>
+              <label class="small" for="payment_method">支付方式</label>
+              <input id="payment_method" type="text" name="payment_method" placeholder="如：微信 / 银行卡" />
+            </div>
+
+            <div style="grid-column: 1 / -1;">
+              <label class="small" for="note">备注</label>
+              <input id="note" type="text" name="note" placeholder="备注（可选）" />
+            </div>
+
+            <div style="grid-column: 1 / -1;" class="toolbar">
+              <button class="btn" type="submit">保存订阅</button>
+              <a class="btn-secondary" href="/subscriptions">取消</a>
+            </div>
+          </form>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

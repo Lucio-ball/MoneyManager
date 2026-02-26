@@ -3,138 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>记账 - 个人财务分析系统</title>
-    <style>
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f7f9fc;
-        color: #1f2937;
-      }
-      .container {
-        max-width: 980px;
-        margin: 32px auto;
-        padding: 0 16px;
-      }
-      .card {
-        background: #ffffff;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-        margin-bottom: 16px;
-      }
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .header a {
-        color: #2563eb;
-        text-decoration: none;
-      }
-      form {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-      .full {
-        grid-column: 1 / -1;
-      }
-      label {
-        display: block;
-        font-size: 14px;
-        margin-bottom: 6px;
-      }
-      input,
-      select,
-      button {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        font-size: 14px;
-        box-sizing: border-box;
-      }
-      select[multiple] {
-        min-height: 110px;
-      }
-      .inline-hint {
-        font-size: 12px;
-        color: #64748b;
-        margin-top: 4px;
-      }
-      .btn {
-        background: #2563eb;
-        color: #fff;
-        border: none;
-        cursor: pointer;
-      }
-      .msg {
-        padding: 10px 12px;
-        border-radius: 8px;
-        margin-bottom: 12px;
-        font-size: 14px;
-      }
-      .ok {
-        background: #dcfce7;
-        color: #166534;
-      }
-      .err {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 14px;
-      }
-      th,
-      td {
-        text-align: left;
-        padding: 10px 8px;
-        border-bottom: 1px solid #e2e8f0;
-        vertical-align: top;
-      }
-      .income {
-        color: #16a34a;
-        font-weight: 600;
-      }
-      .expense {
-        color: #dc2626;
-        font-weight: 600;
-      }
-    </style>
+    <title>MoneyManager · 快速记账</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
   </head>
   <body>
-    <main class="container">
-      <section class="card header">
-        <h1>快速记账</h1>
-        <div>
-          <a href="/">返回首页</a>
-          &nbsp;|&nbsp;
-          <a href="/analysis">查看分析</a>
-          &nbsp;|&nbsp;
-          <a href="/budget">预算</a>
-          &nbsp;|&nbsp;
-          <a href="/ai">AI复盘</a>
+    <header class="top-nav app-shell">
+      <div class="top-nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-dot"></span>
+          <span>MoneyManager</span>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
+          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
+          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
+          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
+          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
+        </nav>
+        <div class="nav-actions">
+          <form method="get" action="/" class="toolbar">
+            <input type="month" name="month" value="{{ month }}" />
+            <button class="btn-secondary" type="submit">切换月份</button>
+          </form>
+          <a class="btn" href="/add">去记账</a>
         </div>
-      </section>
+      </div>
+    </header>
 
-      <section class="card">
+    <main class="app-shell">
+      <div class="page">
+        <section class="panel">
+          <h1 class="page-title">快速记账</h1>
+          <div class="page-subtitle">目标：5-10 秒完成一笔记录</div>
+        </section>
+
+      <section class="panel">
         {% if success == '1' %}
         <div class="msg ok">记账成功，表单已重置。</div>
         {% elif success == '0' %}
-        <div class="msg err">提交失败：请至少填写金额和主类别。</div>
+        <div class="msg danger">提交失败：请至少填写金额和主类别。</div>
         {% endif %}
 
-        <form id="add-transaction" method="post" action="/add">
+        <form id="add-transaction" method="post" action="/add" class="grid-2">
           <div>
-            <label for="amount">金额</label>
+            <label class="small" for="amount">金额</label>
             <input id="amount" type="number" step="0.01" min="0.01" name="amount" placeholder="金额" required />
           </div>
 
           <div>
-            <label for="type">类型</label>
+            <label class="small" for="type">类型</label>
             <select id="type" name="type">
               <option value="expense" selected>支出</option>
               <option value="income">收入</option>
@@ -142,12 +60,12 @@
           </div>
 
           <div>
-            <label for="date">日期</label>
+            <label class="small" for="date">日期</label>
             <input id="date" type="date" name="date" value="{{ today }}" />
           </div>
 
           <div>
-            <label for="category_main">主类别</label>
+            <label class="small" for="category_main">主类别</label>
             <select id="category_main" name="category_main" required>
               <option value="">请选择主类别</option>
               {% for category in category_options %}
@@ -157,12 +75,12 @@
           </div>
 
           <div>
-            <label for="category_sub">子类别</label>
+            <label class="small" for="category_sub">子类别</label>
             <input id="category_sub" type="text" name="category_sub" placeholder="如：外卖 / 奶茶 / 书籍" />
           </div>
 
           <div>
-            <label for="payment_method">支付方式</label>
+            <label class="small" for="payment_method">支付方式</label>
             <select id="payment_method" name="payment_method">
               <option value="wechat">微信</option>
               <option value="alipay_family">支付宝亲密付</option>
@@ -170,29 +88,30 @@
             </select>
           </div>
 
-          <div class="full">
-            <label for="tags">标签（可多选）</label>
+          <div style="grid-column: 1 / -1;">
+            <label class="small" for="tags">标签（可多选）</label>
             <select id="tags" name="tags" multiple>
               {% for tag in tag_options %}
               <option value="{{ tag }}">{{ tag }}</option>
               {% endfor %}
             </select>
-            <div class="inline-hint">按住 Ctrl（Windows）可多选</div>
+            <div class="small" style="margin-top: 4px;">按住 Ctrl（Windows）可多选</div>
           </div>
 
-          <div class="full">
-            <label for="note">备注（可选）</label>
+          <div style="grid-column: 1 / -1;">
+            <label class="small" for="note">备注（可选）</label>
             <input id="note" type="text" name="note" placeholder="备注（可选）" />
           </div>
 
-          <div class="full">
+          <div style="grid-column: 1 / -1;">
             <button class="btn" type="submit">记一笔</button>
           </div>
         </form>
       </section>
 
-      <section class="card">
-        <h2>最近记录（10 笔）</h2>
+      <section class="panel">
+        <h2 class="page-title" style="font-size: 18px;">最近记录（10 笔）</h2>
+        <div class="table-wrap">
         <table>
           <thead>
             <tr>
@@ -235,7 +154,9 @@
             {% endif %}
           </tbody>
         </table>
+        </div>
       </section>
+      </div>
     </main>
   </body>
 </html>

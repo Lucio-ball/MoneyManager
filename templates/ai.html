@@ -3,149 +3,94 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI 复盘 - 个人财务分析系统</title>
-    <style>
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f7f9fc;
-        color: #1f2937;
-      }
-      .container {
-        max-width: 1100px;
-        margin: 28px auto;
-        padding: 0 16px;
-      }
-      .card {
-        background: #fff;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-        margin-bottom: 16px;
-      }
-      .topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-      }
-      .nav a {
-        color: #2563eb;
-        text-decoration: none;
-        margin-left: 8px;
-      }
-      .action-row {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-      }
-      .btn {
-        padding: 9px 12px;
-        border-radius: 8px;
-        border: none;
-        background: #2563eb;
-        color: #fff;
-        cursor: pointer;
-      }
-      .btn.secondary {
-        background: #0f766e;
-      }
-      textarea {
-        width: 100%;
-        min-height: 220px;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        padding: 10px;
-        box-sizing: border-box;
-        font-size: 13px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      .archive-text {
-        white-space: pre-wrap;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 10px;
-      }
-      .msg {
-        font-size: 14px;
-        margin-bottom: 8px;
-      }
-      .ok {
-        color: #16a34a;
-      }
-      .danger {
-        color: #dc2626;
-      }
-      input[type='month'] {
-        padding: 9px 10px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-      }
-    </style>
+    <title>MoneyManager · AI 月度复盘</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
   </head>
   <body>
-    <main class="container">
-      <section class="card topbar">
-        <div>
-          <h1>AI 月度复盘</h1>
-          <div>当前月份：{{ month }}</div>
+    <header class="top-nav app-shell">
+      <div class="top-nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-dot"></span>
+          <span>MoneyManager</span>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
+          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
+          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
+          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
+          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
+        </nav>
+        <div class="nav-actions">
+          <form method="get" action="/ai" class="toolbar">
+            <input type="month" name="month" value="{{ month }}" />
+            <button class="btn-secondary" type="submit">切换月份</button>
+          </form>
+          <a class="btn" href="/add">去记账</a>
         </div>
-        <div class="nav">
-          <a href="/">首页</a>
-          <a href="/analysis">分析</a>
-          <a href="/budget">预算</a>
-        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <div class="page">
+      <section class="panel">
+        <h1 class="page-title">AI 月度复盘</h1>
+        <div class="page-subtitle">当前月份：{{ month }}</div>
       </section>
 
-      <section class="card">
-        <form method="get" action="/ai" class="action-row">
+      <section class="panel">
+        <form method="get" action="/ai" class="toolbar" style="margin-bottom: 12px;">
           <input type="month" name="month" value="{{ month }}" />
-          <button class="btn" type="submit">切换月份</button>
-          <a class="btn" href="/api/ai/monthly/export?month={{ month }}">导出数据包 JSON</a>
-          <button class="btn secondary" type="button" id="copy-json-btn">复制 AI 输入数据包</button>
-          <button class="btn secondary" type="button" id="copy-prompt-btn">复制提示词模板</button>
-          <button class="btn secondary" type="button" id="copy-full-prompt-btn">复制完整提示词（模板+数据）</button>
+          <button class="btn-secondary" type="submit">刷新数据</button>
+          <a class="btn-secondary" href="/api/ai/monthly/export?month={{ month }}">导出数据包 JSON</a>
+          <button class="btn" type="button" id="copy-json-btn">复制 AI 输入数据包</button>
+          <button class="btn-secondary" type="button" id="copy-prompt-btn">复制提示词模板</button>
+          <button class="btn-secondary" type="button" id="copy-full-prompt-btn">复制完整提示词（模板+数据）</button>
         </form>
 
-        <textarea id="ai-package" readonly>{{ ai_package | tojson(indent=2) }}</textarea>
+        <div class="grid-2">
+          <div>
+            <div class="small" style="margin-bottom: 6px;">内置提示词模板</div>
+            <textarea id="ai-prompt-template" class="code" readonly>{{ ai_prompt_template }}</textarea>
+          </div>
+          <div>
+            <div class="small" style="margin-bottom: 6px;">AI 输入数据包（JSON）</div>
+            <textarea id="ai-package" class="code" readonly>{{ ai_package | tojson(indent=2) }}</textarea>
+          </div>
+        </div>
       </section>
 
-      <section class="card">
-        <h2>内置提示词模板</h2>
-        <textarea id="ai-prompt-template" readonly>{{ ai_prompt_template }}</textarea>
-      </section>
-
-      <section class="card">
+      <section class="panel">
         {% if success == '1' %}
         <div class="msg ok">AI 输出已存档。</div>
         {% elif success == '0' %}
         <div class="msg danger">存档失败：请输入内容。</div>
         {% endif %}
 
-        <h2>存档 AI 输出</h2>
+        <h2 class="page-title" style="font-size: 18px;">存档 AI 输出</h2>
         <form method="post" action="/ai">
           <input type="hidden" name="month" value="{{ month }}" />
-          <textarea name="content" placeholder="把 AI 的复盘输出粘贴到这里..."></textarea>
-          <div class="action-row" style="margin-top: 8px;">
+          <textarea class="code" name="content" placeholder="把 AI 的复盘输出粘贴到这里..."></textarea>
+          <div class="toolbar" style="margin-top: 8px;">
             <button class="btn" type="submit">保存到本地存档</button>
           </div>
         </form>
       </section>
 
-      <section class="card">
-        <h2>本月历史存档</h2>
+      <section class="panel">
+        <h2 class="page-title" style="font-size: 18px;">本月历史存档</h2>
         {% if archives %}
           {% for item in archives %}
-          <h4>#{{ item.id }} - {{ item.created_at }}</h4>
-          <div class="archive-text">{{ item.content }}</div>
+          <article class="panel" style="background: #F9FAFB; box-shadow: none; border: 1px solid #E5E7EB; margin-top: 10px;">
+            <div class="small">#{{ item.id }} · {{ item.created_at }}</div>
+            <div style="white-space: pre-wrap; margin-top: 8px; line-height: 1.7;">{{ item.content }}</div>
+          </article>
           {% endfor %}
         {% else %}
-          <p>本月暂无存档。</p>
+          <p class="helper-text">本月暂无存档。</p>
         {% endif %}
       </section>
+      </div>
     </main>
 
     <script>

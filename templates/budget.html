@@ -3,108 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>预算设置 - 个人财务分析系统</title>
-    <style>
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f7f9fc;
-        color: #1f2937;
-      }
-      .container {
-        max-width: 980px;
-        margin: 28px auto;
-        padding: 0 16px;
-      }
-      .card {
-        background: #fff;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-        margin-bottom: 16px;
-      }
-      .topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-      }
-      .nav a {
-        color: #2563eb;
-        text-decoration: none;
-        margin-left: 8px;
-      }
-      .form-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr auto;
-        gap: 10px;
-      }
-      input,
-      select,
-      button {
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        font-size: 14px;
-      }
-      .btn {
-        background: #2563eb;
-        color: #fff;
-        border: none;
-        cursor: pointer;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 14px;
-      }
-      th,
-      td {
-        text-align: left;
-        border-bottom: 1px solid #e2e8f0;
-        padding: 10px 8px;
-      }
-      .ok {
-        color: #16a34a;
-        font-weight: 600;
-      }
-      .warn {
-        color: #d97706;
-        font-weight: 600;
-      }
-      .danger {
-        color: #dc2626;
-        font-weight: 600;
-      }
-      .msg {
-        margin-bottom: 8px;
-        font-size: 14px;
-      }
-    </style>
+    <title>MoneyManager · 预算设置</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
   </head>
   <body>
-    <main class="container">
-      <section class="card topbar">
-        <div>
-          <h1>预算模块</h1>
-          <div>当前月份：{{ month }}</div>
+    <header class="top-nav app-shell">
+      <div class="top-nav-inner">
+        <a class="brand" href="/">
+          <span class="brand-dot"></span>
+          <span>MoneyManager</span>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
+          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
+          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
+          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
+          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
+        </nav>
+        <div class="nav-actions">
+          <form method="get" action="/budget" class="toolbar">
+            <input type="month" name="month" value="{{ month }}" />
+            <button class="btn-secondary" type="submit">切换月份</button>
+          </form>
+          <a class="btn" href="/add">去记账</a>
         </div>
-        <div class="nav">
-          <a href="/">首页</a>
-          <a href="/analysis">分析</a>
-          <a href="/ai">AI 复盘</a>
-        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <div class="page">
+      <section class="panel">
+        <h1 class="page-title">预算模块</h1>
+        <div class="page-subtitle">当前月份：{{ month }}</div>
       </section>
 
-      <section class="card">
+      <section class="panel">
         {% if success == '1' %}
         <div class="msg ok">预算已保存。</div>
         {% elif success == '0' %}
         <div class="msg danger">保存失败：请填写有效预算金额。</div>
         {% endif %}
 
-        <form method="post" action="/budget" class="form-grid">
+        <form method="post" action="/budget" class="toolbar" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto;">
           <input type="month" name="month" value="{{ month }}" required />
           <select name="category_main">
             <option value="">总预算（不选类别）</option>
@@ -117,11 +58,12 @@
         </form>
       </section>
 
-      <section class="card">
-        <h2>预算执行情况</h2>
-        <p>本月实际总支出：¥{{ '%.2f'|format(budget_data.total_expense) }}</p>
+      <section class="panel">
+        <h2 class="page-title" style="font-size: 18px;">预算执行情况</h2>
+        <p class="helper-text">本月实际总支出：¥{{ '%.2f'|format(budget_data.total_expense) }}</p>
 
         {% if budget_data['items'] %}
+        <div class="table-wrap">
         <table>
           <thead>
             <tr>
@@ -141,21 +83,23 @@
               <td>{{ '%.2f'|format(item.execution_rate) }}%</td>
               <td>
                 {% if item.status == '正常' %}
-                <span class="ok">正常</span>
+                <span class="badge ok">正常</span>
                 {% elif item.status == '接近' %}
-                <span class="warn">接近</span>
+                <span class="badge warn">接近</span>
                 {% else %}
-                <span class="danger">超支</span>
+                <span class="badge danger">超支</span>
                 {% endif %}
               </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
+        </div>
         {% else %}
-        <p>暂无预算记录，请先新增一条预算。</p>
+        <p class="helper-text">暂无预算记录，请先新增一条预算。</p>
         {% endif %}
       </section>
+      </div>
     </main>
   </body>
 </html>

@@ -1,7 +1,7 @@
 import os
 import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -54,6 +54,37 @@ def init_db() -> None:
                 month TEXT NOT NULL,
                 content TEXT NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                cycle TEXT CHECK(cycle IN ('monthly', 'yearly', 'weekly', 'quarterly')) NOT NULL,
+                next_billing_date TEXT NOT NULL,
+                category TEXT,
+                payment_method TEXT,
+                note TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscription_cancellations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subscription_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                cycle TEXT NOT NULL,
+                next_billing_date TEXT NOT NULL,
+                category TEXT,
+                payment_method TEXT,
+                note TEXT,
+                cancelled_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
@@ -208,6 +239,25 @@ def _month_sequence(month: str, count: int = 3) -> list[str]:
             current_year -= 1
     result.reverse()
     return result
+
+
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _monthly_cost(amount: float, cycle: str) -> float:
+    if cycle == "yearly":
+        return round(amount / 12, 2)
+    if cycle == "quarterly":
+        return round(amount / 3, 2)
+    if cycle == "weekly":
+        return round(amount * 52 / 12, 2)
+    return round(amount, 2)
 
 
 def get_transactions_by_month(month: str) -> list[dict]:
@@ -568,12 +618,335 @@ def get_ai_archives(month: str, limit: int = 10) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def create_subscription(subscription: dict) -> int:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO subscriptions (
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method,
+                note
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                subscription["name"],
+                float(subscription["amount"]),
+                subscription["cycle"],
+                subscription["next_billing_date"],
+                subscription.get("category") or None,
+                subscription.get("payment_method") or None,
+                subscription.get("note") or None,
+            ),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def get_subscription_by_id(subscription_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method,
+                note,
+                created_at
+            FROM subscriptions
+            WHERE id = ?
+            """,
+            (subscription_id,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    item = dict(row)
+    item["amount"] = round(float(item["amount"]), 2)
+    item["monthly_cost"] = _monthly_cost(item["amount"], item["cycle"])
+
+    today = date.today()
+    next_billing = _parse_date(item.get("next_billing_date"))
+    if next_billing:
+        item["is_expired"] = next_billing < today
+        item["is_upcoming"] = today <= next_billing <= today + timedelta(days=7)
+        item["days_until_billing"] = (next_billing - today).days
+    else:
+        item["is_expired"] = False
+        item["is_upcoming"] = False
+        item["days_until_billing"] = None
+
+    return item
+
+
+def list_subscriptions() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method,
+                note,
+                created_at
+            FROM subscriptions
+            ORDER BY next_billing_date ASC, id DESC
+            """
+        ).fetchall()
+
+    today = date.today()
+    in_seven_days = today + timedelta(days=7)
+    result: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        item["amount"] = round(float(item["amount"]), 2)
+        item["monthly_cost"] = _monthly_cost(item["amount"], item["cycle"])
+
+        next_billing = _parse_date(item.get("next_billing_date"))
+        if next_billing:
+            item["is_expired"] = next_billing < today
+            item["is_upcoming"] = today <= next_billing <= in_seven_days
+            item["days_until_billing"] = (next_billing - today).days
+        else:
+            item["is_expired"] = False
+            item["is_upcoming"] = False
+            item["days_until_billing"] = None
+
+        result.append(item)
+
+    return result
+
+
+def update_subscription(subscription_id: int, subscription: dict) -> bool:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE subscriptions
+            SET
+                name = ?,
+                amount = ?,
+                cycle = ?,
+                next_billing_date = ?,
+                category = ?,
+                payment_method = ?,
+                note = ?
+            WHERE id = ?
+            """,
+            (
+                subscription["name"],
+                float(subscription["amount"]),
+                subscription["cycle"],
+                subscription["next_billing_date"],
+                subscription.get("category") or None,
+                subscription.get("payment_method") or None,
+                subscription.get("note") or None,
+                subscription_id,
+            ),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def delete_subscription(subscription_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method,
+                note
+            FROM subscriptions
+            WHERE id = ?
+            """,
+            (subscription_id,),
+        ).fetchone()
+
+        if not row:
+            return False
+
+        item = dict(row)
+        conn.execute(
+            """
+            INSERT INTO subscription_cancellations (
+                subscription_id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method,
+                note
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(item["id"]),
+                item["name"],
+                float(item["amount"]),
+                item["cycle"],
+                item["next_billing_date"],
+                item.get("category"),
+                item.get("payment_method"),
+                item.get("note"),
+            ),
+        )
+
+        cursor = conn.execute(
+            "DELETE FROM subscriptions WHERE id = ?",
+            (subscription_id,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def get_upcoming_subscriptions(days: int = 7) -> list[dict]:
+    today = date.today().isoformat()
+    deadline = (date.today() + timedelta(days=days)).isoformat()
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method,
+                note,
+                created_at
+            FROM subscriptions
+            WHERE next_billing_date >= ? AND next_billing_date <= ?
+            ORDER BY next_billing_date ASC, id DESC
+            """,
+            (today, deadline),
+        ).fetchall()
+
+    result: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        item["amount"] = round(float(item["amount"]), 2)
+        item["monthly_cost"] = _monthly_cost(item["amount"], item["cycle"])
+        next_billing = _parse_date(item.get("next_billing_date"))
+        item["days_until_billing"] = (next_billing - date.today()).days if next_billing else None
+        result.append(item)
+    return result
+
+
+def get_subscription_monthly_cost_summary() -> dict:
+    subscriptions = list_subscriptions()
+    total_monthly_cost = round(sum(item["monthly_cost"] for item in subscriptions), 2)
+    upcoming_count = sum(1 for item in subscriptions if item.get("is_upcoming"))
+    expired_count = sum(1 for item in subscriptions if item.get("is_expired"))
+
+    cycle_map: dict[str, int] = {"monthly": 0, "yearly": 0, "weekly": 0, "quarterly": 0}
+    for item in subscriptions:
+        cycle_map[item["cycle"]] = cycle_map.get(item["cycle"], 0) + 1
+
+    top_monthly_cost = sorted(subscriptions, key=lambda x: x["monthly_cost"], reverse=True)[:5]
+
+    return {
+        "total_count": len(subscriptions),
+        "total_monthly_cost": total_monthly_cost,
+        "upcoming_count": upcoming_count,
+        "expired_count": expired_count,
+        "cycle_distribution": cycle_map,
+        "top_monthly_cost": [
+            {
+                "id": item["id"],
+                "name": item["name"],
+                "monthly_cost": item["monthly_cost"],
+            }
+            for item in top_monthly_cost
+        ],
+    }
+
+
+def get_subscription_monthly_recap(month: str) -> dict:
+    with get_connection() as conn:
+        created_row = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM subscriptions
+            WHERE substr(created_at, 1, 7) = ?
+            """,
+            (month,),
+        ).fetchone()
+        cancelled_row = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM subscription_cancellations
+            WHERE substr(cancelled_at, 1, 7) = ?
+            """,
+            (month,),
+        ).fetchone()
+
+    year, mon = map(int, month.split("-"))
+    if mon == 12:
+        next_month = f"{year + 1:04d}-01"
+    else:
+        next_month = f"{year:04d}-{mon + 1:02d}"
+
+    with get_connection() as conn:
+        next_month_rows = conn.execute(
+            """
+            SELECT
+                id,
+                name,
+                amount,
+                cycle,
+                next_billing_date,
+                category,
+                payment_method
+            FROM subscriptions
+            WHERE substr(next_billing_date, 1, 7) = ?
+            ORDER BY next_billing_date ASC, id DESC
+            """,
+            (next_month,),
+        ).fetchall()
+
+    next_month_upcoming = []
+    for row in next_month_rows:
+        item = dict(row)
+        item["amount"] = round(float(item["amount"]), 2)
+        item["monthly_cost"] = _monthly_cost(item["amount"], item["cycle"])
+        next_month_upcoming.append(item)
+
+    summary = get_subscription_monthly_cost_summary()
+
+    return {
+        "month": month,
+        "monthly_total_cost": summary["total_monthly_cost"],
+        "new_subscriptions": int(created_row["total"] or 0),
+        "cancelled_subscriptions": int(cancelled_row["total"] or 0),
+        "next_month_upcoming": next_month_upcoming,
+    }
+
+
 def get_ai_monthly_package(month: str) -> dict:
     return {
         "month": month,
         "monthly_stats": get_monthly_stats(month),
         "insights": get_monthly_insights(month),
         "budgets": get_budget_execution(month),
+        "subscriptions": get_subscription_monthly_recap(month),
     }
 
 
