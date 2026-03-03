@@ -5,6 +5,7 @@ const structure = analysisData.structure || {};
 const rhythm = analysisData.rhythm || {};
 const trends = analysisData.trends || {};
 const consumptionHealth = analysisData.consumption_health || {};
+const riskRadar = analysisData.risk_radar || (analysisData.risks || {}).risk_radar || {};
 
 const chartTheme = window.MMChartTheme || {
   palette: ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#EF4444", "#64748B", "#8B5CF6"],
@@ -65,6 +66,45 @@ if (healthDimensions.length > 0) {
           data: healthDimensions.map((item) => item.value),
           borderColor: "#2563EB",
           backgroundColor: chartTheme.alpha("#2563EB", 0.2),
+          pointRadius: 3,
+          pointHoverRadius: 4,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: { color: "#475569", boxWidth: 10, usePointStyle: true, pointStyle: "circle" },
+        },
+      },
+      scales: {
+        r: {
+          suggestedMin: 0,
+          suggestedMax: 100,
+          grid: { color: "rgba(100, 116, 139, 0.2)" },
+          angleLines: { color: "rgba(100, 116, 139, 0.2)" },
+          pointLabels: { color: "#475569", font: { size: 12 } },
+          ticks: { color: "#64748B", backdropColor: "transparent", stepSize: 20 },
+        },
+      },
+    },
+  });
+}
+
+const riskDimensions = riskRadar.dimensions || [];
+if (riskDimensions.length > 0) {
+  new Chart(document.getElementById("riskRadarChart"), {
+    type: "radar",
+    data: {
+      labels: riskDimensions.map((item) => item.label),
+      datasets: [
+        {
+          label: "风险雷达",
+          data: riskDimensions.map((item) => item.value),
+          borderColor: "#EF4444",
+          backgroundColor: chartTheme.alpha("#EF4444", 0.2),
           pointRadius: 3,
           pointHoverRadius: 4,
           borderWidth: 2,

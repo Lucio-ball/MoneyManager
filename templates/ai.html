@@ -34,6 +34,7 @@
       <div class="page">
       {% set consumption_health = ai_package.consumption_health if ai_package and ai_package.consumption_health else (ai_package.insights.consumption_health if ai_package and ai_package.insights else {}) %}
       {% set consumption_persona = ai_package.consumption_persona if ai_package and ai_package.consumption_persona else (ai_package.insights.consumption_persona if ai_package and ai_package.insights else {}) %}
+      {% set risk_radar = ai_package.risk_radar if ai_package and ai_package.risk_radar else (ai_package.insights.risk_radar if ai_package and ai_package.insights else {}) %}
       <section class="panel">
         <h1 class="page-title">AI 月度复盘</h1>
         <div class="page-subtitle">当前月份：{{ month }}</div>
@@ -101,6 +102,37 @@
           </div>
           {% endfor %}
         </div>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">风险解释</h2>
+        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
+          <article class="kpi-card">
+            <div class="kpi-label">风险雷达总分</div>
+            <div class="kpi-value mono">{{ '%.2f'|format(risk_radar.score or 0) }}</div>
+            <div class="small">等级：{{ risk_radar.level or '低风险' }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">维度快照</div>
+            <div class="small" style="margin-top: 4px;">冲动风险：{{ '%.2f'|format((risk_radar.metrics.impulsive_ratio if risk_radar.metrics else 0)) }}%</div>
+            <div class="small">订阅占比：{{ '%.2f'|format((risk_radar.metrics.subscription_ratio if risk_radar.metrics else 0)) }}%</div>
+            <div class="small">消费波动 CV：{{ '%.4f'|format((risk_radar.metrics.daily_cv if risk_radar.metrics else 0)) }}</div>
+          </article>
+        </div>
+        {% if risk_radar.explanations %}
+        <div class="category-list" style="margin-top: 12px;">
+          {% for reason in risk_radar.explanations %}
+          <div class="category-item">
+            <div class="category-main">
+              <div class="category-name">风险说明</div>
+              <div class="small">{{ reason }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="helper-text" style="margin-top: 10px;">当前月份暂无明显高风险维度。</div>
         {% endif %}
       </section>
 

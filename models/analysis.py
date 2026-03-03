@@ -287,6 +287,63 @@ def _build_consumption_persona(
     }
 
 
+def _risk_level(score: float) -> str:
+    if score >= 70:
+        return "高风险"
+    if score >= 40:
+        return "中风险"
+    return "低风险"
+
+
+def _build_risk_radar(consumption_health: dict, subscription_ratio: float) -> dict:
+    metrics = consumption_health.get("metrics", {})
+    impulsive_ratio = float(metrics.get("impulsive_ratio", 0) or 0)
+    learning_ratio = float(metrics.get("learning_ratio", 0) or 0)
+    category_hhi = float(metrics.get("category_hhi", 0) or 0)
+    daily_cv = float(metrics.get("daily_cv", 0) or 0)
+
+    impulsive_risk = _clamp_score((impulsive_ratio / 40) * 100)
+    subscription_pressure = _clamp_score((subscription_ratio / 25) * 100)
+    category_concentration = _clamp_score(((category_hhi - 0.18) / 0.42) * 100)
+    spending_volatility = _clamp_score((daily_cv / 1.2) * 100)
+    learning_investment_risk = _clamp_score(((12 - learning_ratio) / 12) * 100)
+
+    dimensions = [
+        {"key": "impulsive_risk", "label": "冲动风险", "value": impulsive_risk},
+        {"key": "subscription_pressure", "label": "订阅压力", "value": subscription_pressure},
+        {"key": "category_concentration", "label": "类别集中度", "value": category_concentration},
+        {"key": "spending_volatility", "label": "消费波动度", "value": spending_volatility},
+        {"key": "learning_investment_risk", "label": "学习投资度", "value": learning_investment_risk},
+    ]
+
+    risk_score = round(sum(item["value"] for item in dimensions) / len(dimensions), 2)
+
+    explain_map = {
+        "impulsive_risk": f"冲动消费占比 {impulsive_ratio:.2f}%，对预算稳定性形成压力。",
+        "subscription_pressure": f"订阅成本占比 {subscription_ratio:.2f}%，固定支出弹性较低。",
+        "category_concentration": f"类别集中度指数 HHI={category_hhi:.4f}，头部类别聚集明显。",
+        "spending_volatility": f"日支出波动系数 CV={daily_cv:.4f}，消费节奏存在起伏。",
+        "learning_investment_risk": f"学习投资占比 {learning_ratio:.2f}%，长期投入仍有提升空间。",
+    }
+
+    top_dims = sorted(dimensions, key=lambda item: item["value"], reverse=True)[:3]
+    explanations = [explain_map[item["key"]] for item in top_dims]
+
+    return {
+        "score": risk_score,
+        "level": _risk_level(risk_score),
+        "dimensions": dimensions,
+        "explanations": explanations,
+        "metrics": {
+            "impulsive_ratio": round(impulsive_ratio, 2),
+            "subscription_ratio": round(subscription_ratio, 2),
+            "category_hhi": round(category_hhi, 4),
+            "daily_cv": round(daily_cv, 4),
+            "learning_ratio": round(learning_ratio, 2),
+        },
+    }
+
+
 def get_monthly_insights(month: str) -> dict:
     monthly_stats = get_monthly_stats(month)
     total_expense = monthly_stats["total_expense"]
@@ -369,6 +426,12 @@ def get_monthly_insights(month: str) -> dict:
         impulsive_amount=float(impulsive_amount),
         learning_amount=float(learning_amount),
     )
+    subscription_metrics = get_subscription_monthly_metrics(month)
+    subscription_ratio = (
+        float(subscription_metrics.get("estimated_monthly_cost", 0) or 0) / float(total_expense or 0) * 100
+        if float(total_expense or 0) > 0
+        else 0.0
+    )
     consumption_persona = _build_consumption_persona(
         month=month,
         total_expense=float(total_expense or 0),
@@ -377,6 +440,7 @@ def get_monthly_insights(month: str) -> dict:
         month_total_map=month_total_map,
         consumption_health=consumption_health,
     )
+    risk_radar = _build_risk_radar(consumption_health, subscription_ratio)
 
     return {
         "month": month,
@@ -392,6 +456,7 @@ def get_monthly_insights(month: str) -> dict:
         },
         "consumption_health": consumption_health,
         "consumption_persona": consumption_persona,
+        "risk_radar": risk_radar,
     }
 
 
@@ -411,6 +476,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
     learning_ratio = float(insights.get("learning_investment_ratio", {}).get("ratio", 0) or 0)
     consumption_health = insights.get("consumption_health", {})
     consumption_persona = insights.get("consumption_persona", {})
+    risk_radar = insights.get("risk_radar", {})
     consumption_health_score = float(consumption_health.get("score", 0) or 0)
 
     top_category = (monthly_stats.get("category_stats") or [{}])[0].get("name", "其他")
@@ -599,6 +665,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
         },
         "consumption_health": consumption_health,
         "consumption_persona": consumption_persona,
+        "risk_radar": risk_radar,
         "structure": {
             "category_stats": monthly_stats.get("category_stats", []),
             "tag_stats": this_month_tag_stats,
@@ -632,6 +699,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
             "long_term_high_ratio_categories": long_term_categories,
             "learning_investment_ratio": insights.get("learning_investment_ratio", {}),
             "subscription_ratio": round(subscription_ratio, 2),
+            "risk_radar": risk_radar,
             "items": risk_items,
         },
         "budget": budget_health,
@@ -683,6 +751,7 @@ def get_ai_monthly_package(month: str) -> dict:
         "insights": insights,
         "consumption_health": insights.get("consumption_health", {}),
         "consumption_persona": insights.get("consumption_persona", {}),
+        "risk_radar": insights.get("risk_radar", {}),
         "budgets": get_budget_execution(month),
         "subscriptions": get_subscription_monthly_recap(month),
     }
