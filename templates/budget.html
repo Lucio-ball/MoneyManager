@@ -35,6 +35,7 @@
       <section class="panel">
         <h1 class="page-title">预算模块</h1>
         <div class="page-subtitle">当前月份：{{ month }}</div>
+        <div class="section-insight">通过预算配置与风险识别联动，持续提升本月资金使用效率。</div>
       </section>
 
       <section class="panel">
@@ -44,7 +45,7 @@
         <div class="msg danger">保存失败：请填写有效预算金额。</div>
         {% endif %}
 
-        <form method="post" action="/budget" class="toolbar" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto;">
+        <form method="post" action="/budget" class="form-grid form-grid-4">
           <input type="month" name="month" value="{{ month }}" required />
           <select name="category_main">
             <option value="">总预算（不选类别）</option>
@@ -57,8 +58,31 @@
         </form>
       </section>
 
+      <section class="kpi-grid">
+        <article class="kpi-card">
+          <div class="kpi-label">预算健康度评分</div>
+          <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.value) }}</div>
+          <div class="small">{{ budget_health.score.level }}</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">预算执行率</div>
+          <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.execution_rate) }}%</div>
+          <div class="small">预算 ¥{{ '%.2f'|format(budget_health.score.total_budget) }}</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">订阅压力</div>
+          <div class="kpi-value mono">{{ '%.2f'|format((budget_health.score.components | selectattr('name', 'equalto', 'subscription_pressure') | list | first).value if budget_health.score.components else 0) }}%</div>
+          <div class="small">越低越健康</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">冲动消费比例</div>
+          <div class="kpi-value mono">{{ '%.2f'|format((budget_health.score.components | selectattr('name', 'equalto', 'impulsive_ratio') | list | first).value if budget_health.score.components else 0) }}%</div>
+          <div class="small">越低越健康</div>
+        </article>
+      </section>
+
       <section class="panel">
-        <h2 class="page-title" style="font-size: 18px;">预算执行情况</h2>
+        <h2 class="section-title">预算执行情况</h2>
         <p class="helper-text">本月实际总支出：¥{{ '%.2f'|format(budget_data.total_expense) }}</p>
 
         {% if budget_data['items'] %}
@@ -96,6 +120,80 @@
         </div>
         {% else %}
         <p class="helper-text">暂无预算记录，请先新增一条预算。</p>
+        {% endif %}
+      </section>
+
+      <section class="grid-2">
+        <article class="panel">
+          <h2 class="section-title">风险类别：导致超支</h2>
+          {% if budget_health.category_risks.overspending %}
+          <div class="category-list" style="margin-top: 10px;">
+            {% for item in budget_health.category_risks.overspending %}
+            <div class="category-item">
+              <div class="category-main">
+                <div class="category-name">{{ item.category }}</div>
+                <div class="small">执行率 {{ '%.2f'|format(item.execution_rate) }}%</div>
+              </div>
+              <div class="mono" style="text-align: right;">
+                <div>+¥{{ '%.2f'|format(item.deviation_amount) }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="helper-text">暂无超支类别。</div>
+          {% endif %}
+        </article>
+
+        <article class="panel">
+          <h2 class="section-title">风险类别：接近预算</h2>
+          {% if budget_health.category_risks.near_budget %}
+          <div class="category-list" style="margin-top: 10px;">
+            {% for item in budget_health.category_risks.near_budget %}
+            <div class="category-item">
+              <div class="category-main">
+                <div class="category-name">{{ item.category }}</div>
+                <div class="small">执行率 {{ '%.2f'|format(item.execution_rate) }}%</div>
+              </div>
+              <div class="mono" style="text-align: right;">
+                <div>余量 ¥{{ '%.2f'|format(item.remaining_amount) }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="helper-text">暂无接近预算类别。</div>
+          {% endif %}
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">风险类别：预算设置不合理</h2>
+        {% if budget_health.category_risks.unreasonable_budget %}
+        <div class="table-wrap" style="margin-top: 10px;">
+          <table>
+            <thead>
+              <tr>
+                <th>类别</th>
+                <th>当前预算</th>
+                <th>历史平均支出</th>
+                <th>历史偏差率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in budget_health.category_risks.unreasonable_budget %}
+              <tr>
+                <td>{{ item.category }}</td>
+                <td>¥{{ '%.2f'|format(item.budget_amount) }}</td>
+                <td>¥{{ '%.2f'|format(item.historical_avg_expense) }}</td>
+                <td>{{ '%.2f'|format(item.historical_deviation_rate) }}%</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="helper-text">当前预算与历史支出偏差在可接受范围内。</div>
         {% endif %}
       </section>
       </div>

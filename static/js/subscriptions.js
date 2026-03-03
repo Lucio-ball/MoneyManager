@@ -6,6 +6,28 @@ const subscriptionData = subscriptionDataElement
 const summary = subscriptionData.summary || {};
 const topMonthlyCost = summary.top_monthly_cost || [];
 const cycleDistribution = summary.cycle_distribution || {};
+const chartTheme = window.MMChartTheme || {
+  palette: ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#8B5CF6"],
+  pieOptions() {
+    return {
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { color: "#475569", boxWidth: 10, usePointStyle: true, pointStyle: "circle" },
+        },
+      },
+    };
+  },
+  barOptions() {
+    return {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#64748B" } },
+        y: { grid: { color: "rgba(100, 116, 139, 0.14)" }, ticks: { color: "#64748B" } },
+      },
+    };
+  },
+};
 
 const cycleLabelsMap = {
   monthly: "月付",
@@ -30,18 +52,11 @@ if (cycleLabels.length > 0) {
         {
           data: cycleValues,
           borderWidth: 0,
-          backgroundColor: ["#2563EB", "#14B8A6", "#F59E0B", "#8B5CF6"],
+          backgroundColor: chartTheme.palette.slice(0, 4),
         },
       ],
     },
-    options: {
-      plugins: {
-        legend: {
-          position: "bottom",
-          labels: { color: "#374151", boxWidth: 10, usePointStyle: true, pointStyle: "circle" },
-        },
-      },
-    },
+    options: chartTheme.pieOptions(),
   });
 }
 
@@ -54,20 +69,12 @@ if (topMonthlyCost.length > 0) {
         {
           label: "月折算成本",
           data: topMonthlyCost.map((item) => item.monthly_cost),
-          backgroundColor: ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B"],
+          backgroundColor: chartTheme.palette.slice(0, 5),
           borderRadius: 6,
         },
       ],
     },
-    options: {
-      plugins: {
-        legend: { display: false },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: "#6B7280" } },
-        y: { grid: { color: "rgba(107, 114, 128, 0.08)" }, ticks: { color: "#6B7280" } },
-      },
-    },
+    options: chartTheme.barOptions(),
   });
 }
 

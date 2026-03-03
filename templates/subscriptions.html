@@ -33,6 +33,7 @@
         <section class="panel">
           <h1 class="page-title">订阅管理</h1>
           <div class="page-subtitle">统一查看月成本、即将扣费与到期风险</div>
+          <div class="section-insight">持续跟踪订阅结构，可快速定位低频高价与待清理订阅项。</div>
         </section>
 
         {% if success == 'created' %}
@@ -62,17 +63,17 @@
 
         <section class="grid-2">
           <article class="panel">
-            <h2 class="page-title" style="font-size: 18px;">订阅周期分布</h2>
+            <h2 class="section-title">订阅周期分布</h2>
             {% if summary.total_count > 0 %}
-            <canvas id="subscriptionCycleChart" height="180" style="margin-top: 12px;"></canvas>
+            <div style="height: 260px; margin-top: 12px;"><canvas id="subscriptionCycleChart"></canvas></div>
             {% else %}
             <div class="helper-text">暂无订阅数据。</div>
             {% endif %}
           </article>
           <article class="panel">
-            <h2 class="page-title" style="font-size: 18px;">月折算成本 TOP 5</h2>
+            <h2 class="section-title">月折算成本 TOP 5</h2>
             {% if summary.top_monthly_cost %}
-            <canvas id="subscriptionTopCostChart" height="180" style="margin-top: 12px;"></canvas>
+            <div style="height: 260px; margin-top: 12px;"><canvas id="subscriptionTopCostChart"></canvas></div>
             {% else %}
             <div class="helper-text">暂无可展示的成本排行。</div>
             {% endif %}
@@ -80,7 +81,7 @@
         </section>
 
         <section class="panel">
-          <h2 class="page-title" style="font-size: 18px;">未来 7 天扣费提醒</h2>
+          <h2 class="section-title">未来 7 天扣费提醒</h2>
           {% if upcoming %}
           <div class="category-list" style="margin-top: 10px;">
             {% for item in upcoming %}
@@ -102,7 +103,7 @@
         </section>
 
         <section class="panel">
-          <h2 class="page-title" style="font-size: 18px;">订阅列表</h2>
+          <h2 class="section-title">订阅列表</h2>
           {% if subscriptions %}
           <div class="subscription-grid" style="margin-top: 10px;">
             {% for item in subscriptions %}
@@ -149,6 +150,7 @@
       {{ {'summary': summary, 'subscriptions': subscriptions} | tojson }}
     </script>
     {% include '_fab_transaction.html' %}
+    <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
     <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>

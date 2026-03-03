@@ -2,7 +2,8 @@ from datetime import date
 
 from flask import Blueprint, jsonify, render_template, request
 
-from services.budget_service import get_budget_execution
+from services.analysis_service import get_monthly_insights
+from services.budget_service import get_budget_execution, get_budget_health_profile
 from services.subscription_service import (
     get_subscription_monthly_cost_summary,
     get_subscription_monthly_metrics,
@@ -31,6 +32,7 @@ def index():
     dashboard = get_monthly_dashboard_data(month=month)
     monthly_stats = get_monthly_stats(month)
     budget_data = get_budget_execution(month)
+    budget_health = get_budget_health_profile(month)
 
     current_month = date.today().strftime("%Y-%m")
     today_expense = get_today_expense() if month == current_month else 0.0
@@ -46,6 +48,7 @@ def index():
     subscription_metrics = get_subscription_monthly_metrics(month)
     subscription_upcoming = get_upcoming_subscriptions(days=7)[:3]
     recent_records = get_recent_transactions(limit=10)
+    consumption_health = get_monthly_insights(month).get("consumption_health", {})
 
     return render_template(
         "index.html",
@@ -61,6 +64,8 @@ def index():
         subscription_metrics=subscription_metrics,
         subscription_upcoming=subscription_upcoming,
         recent_records=recent_records,
+        consumption_health=consumption_health,
+        budget_health=budget_health,
     )
 
 

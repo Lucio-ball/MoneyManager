@@ -3,7 +3,7 @@ from datetime import date
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 from config import CATEGORY_OPTIONS
-from services.budget_service import get_budget_execution, upsert_budget
+from services.budget_service import get_budget_execution, get_budget_health_profile, upsert_budget
 
 bp = Blueprint("budget_routes", __name__)
 
@@ -23,6 +23,7 @@ def budget_page():
 
     success = request.args.get("success")
     budget_data = get_budget_execution(month)
+    budget_health = get_budget_health_profile(month)
     return render_template(
         "budget.html",
         active_page="budget",
@@ -30,6 +31,7 @@ def budget_page():
         success=success,
         category_options=CATEGORY_OPTIONS,
         budget_data=budget_data,
+        budget_health=budget_health,
     )
 
 
@@ -49,4 +51,20 @@ def create_budget_api():
 @bp.route("/api/budgets", methods=["GET"], endpoint="list_budget_api")
 def list_budget_api():
     month = request.args.get("month") or date.today().strftime("%Y-%m")
-    return jsonify(get_budget_execution(month))
+    execution = get_budget_execution(month)
+    health = get_budget_health_profile(month)
+    return jsonify(
+        {
+            **execution,
+            "health_score": health.get("score", {}),
+            "category_risks": health.get("category_risks", {}),
+            "risk_hints": health.get("risk_hints", []),
+            "budget_trends": health.get("trends", {}),
+        }
+    )
+
+
+@bp.route("/api/budgets/health", methods=["GET"], endpoint="budget_health_api")
+def budget_health_api():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    return jsonify(get_budget_health_profile(month))

@@ -1,9 +1,162 @@
+import math
+from calendar import monthrange
+
 from extensions.database import get_connection
-from models.budget import get_budget_execution
+from models.budget import get_budget_execution, get_budget_health_profile
 from models.subscription import get_subscription_monthly_metrics, get_subscription_monthly_recap
 from models.transaction import get_monthly_stats, get_transactions_by_month
 from utils.date_utils import month_sequence
 from utils.trend_utils import parse_tags
+
+
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(100.0, value)), 2)
+
+
+def _health_level(score: float) -> str:
+    if score >= 80:
+        return "优秀"
+    if score >= 60:
+        return "良好"
+    if score >= 40:
+        return "一般"
+    return "需关注"
+
+
+def _calculate_consumption_health(
+    month: str,
+    total_expense: float,
+    daily_expense: list[dict],
+    records: list[dict],
+    category_stats: list[dict],
+    impulsive_amount: float,
+    learning_amount: float,
+) -> dict:
+    if total_expense <= 0:
+        neutral_score = 80.0
+        return {
+            "score": neutral_score,
+            "level": _health_level(neutral_score),
+            "dimensions": [
+                {"key": "impulse_control", "label": "冲动控制", "value": neutral_score},
+                {"key": "need_structure", "label": "刚需结构", "value": neutral_score},
+                {"key": "learning_investment", "label": "学习投资", "value": neutral_score},
+                {"key": "category_balance", "label": "类别分散", "value": neutral_score},
+                {"key": "spending_stability", "label": "消费稳定", "value": neutral_score},
+            ],
+            "breakdown": {
+                "impulse_control": neutral_score,
+                "need_structure": neutral_score,
+                "learning_investment": neutral_score,
+                "category_balance": neutral_score,
+                "spending_stability": neutral_score,
+            },
+            "metrics": {
+                "impulsive_ratio": 0.0,
+                "rigid_ratio": 0.0,
+                "non_rigid_ratio": 0.0,
+                "learning_ratio": 0.0,
+                "category_hhi": 0.0,
+                "daily_variance": 0.0,
+                "daily_std_dev": 0.0,
+                "daily_cv": 0.0,
+            },
+        }
+
+    impulsive_ratio = (impulsive_amount / total_expense * 100) if total_expense > 0 else 0.0
+    impulsive_score = _clamp_score((40 - impulsive_ratio) / 40 * 100)
+
+    rigid_amount = 0.0
+    for record in records:
+        if record.get("type") != "expense":
+            continue
+        tags = set(record.get("tags", []))
+        if "刚需" in tags:
+            rigid_amount += float(record.get("amount") or 0)
+
+    rigid_ratio = (rigid_amount / total_expense * 100) if total_expense > 0 else 0.0
+    non_rigid_ratio = 100 - rigid_ratio if total_expense > 0 else 0.0
+    need_structure_score = _clamp_score(100 - abs(rigid_ratio - 60) * 2)
+
+    learning_ratio = (learning_amount / total_expense * 100) if total_expense > 0 else 0.0
+    learning_score = _clamp_score((learning_ratio / 15) * 100)
+
+    category_amounts = [float(item.get("amount") or 0) for item in category_stats if float(item.get("amount") or 0) > 0]
+    if len(category_amounts) <= 1:
+        category_hhi = 1.0
+        category_balance_score = 0.0
+    else:
+        shares = [amount / total_expense for amount in category_amounts]
+        category_hhi = sum(share * share for share in shares)
+        hhi_min = 1 / len(category_amounts)
+        concentration_norm = (category_hhi - hhi_min) / (1 - hhi_min)
+        category_balance_score = _clamp_score((1 - concentration_norm) * 100)
+
+    try:
+        year_str, month_str = month.split("-")
+        year_num = int(year_str)
+        month_num = int(month_str)
+        days_count = monthrange(year_num, month_num)[1]
+    except (ValueError, TypeError):
+        days_count = len(daily_expense)
+
+    daily_map = {str(item.get("date")): float(item.get("amount") or 0) for item in daily_expense}
+    if days_count > 0 and len(month) == 7:
+        all_daily_amounts = [daily_map.get(f"{month}-{day:02d}", 0.0) for day in range(1, days_count + 1)]
+    else:
+        all_daily_amounts = [float(item.get("amount") or 0) for item in daily_expense]
+
+    if all_daily_amounts:
+        daily_avg = sum(all_daily_amounts) / len(all_daily_amounts)
+        daily_variance = sum((value - daily_avg) ** 2 for value in all_daily_amounts) / len(all_daily_amounts)
+        daily_std_dev = math.sqrt(daily_variance)
+        daily_cv = daily_std_dev / max(daily_avg, 1.0)
+    else:
+        daily_variance = 0.0
+        daily_std_dev = 0.0
+        daily_cv = 0.0
+
+    spending_stability_score = _clamp_score(100 - daily_cv * 45)
+
+    total_score = round(
+        (
+            impulsive_score * 0.30
+            + need_structure_score * 0.20
+            + learning_score * 0.20
+            + category_balance_score * 0.15
+            + spending_stability_score * 0.15
+        ),
+        2,
+    )
+
+    return {
+        "score": total_score,
+        "level": _health_level(total_score),
+        "dimensions": [
+            {"key": "impulse_control", "label": "冲动控制", "value": impulsive_score},
+            {"key": "need_structure", "label": "刚需结构", "value": need_structure_score},
+            {"key": "learning_investment", "label": "学习投资", "value": learning_score},
+            {"key": "category_balance", "label": "类别分散", "value": category_balance_score},
+            {"key": "spending_stability", "label": "消费稳定", "value": spending_stability_score},
+        ],
+        "breakdown": {
+            "impulse_control": impulsive_score,
+            "need_structure": need_structure_score,
+            "learning_investment": learning_score,
+            "category_balance": category_balance_score,
+            "spending_stability": spending_stability_score,
+        },
+        "metrics": {
+            "impulsive_ratio": round(impulsive_ratio, 2),
+            "rigid_ratio": round(rigid_ratio, 2),
+            "non_rigid_ratio": round(non_rigid_ratio, 2),
+            "learning_ratio": round(learning_ratio, 2),
+            "category_hhi": round(category_hhi, 4),
+            "daily_variance": round(daily_variance, 2),
+            "daily_std_dev": round(daily_std_dev, 2),
+            "daily_cv": round(daily_cv, 4),
+        },
+    }
 
 
 def get_monthly_insights(month: str) -> dict:
@@ -79,6 +232,15 @@ def get_monthly_insights(month: str) -> dict:
 
     impulsive_ratio = (impulsive_amount / total_expense * 100) if total_expense > 0 else 0
     learning_ratio = (learning_amount / total_expense * 100) if total_expense > 0 else 0
+    consumption_health = _calculate_consumption_health(
+        month=month,
+        total_expense=float(total_expense or 0),
+        daily_expense=monthly_stats.get("daily_expense", []),
+        records=records,
+        category_stats=monthly_stats.get("category_stats", []),
+        impulsive_amount=float(impulsive_amount),
+        learning_amount=float(learning_amount),
+    )
 
     return {
         "month": month,
@@ -92,6 +254,7 @@ def get_monthly_insights(month: str) -> dict:
             "amount": round(learning_amount, 2),
             "ratio": round(learning_ratio, 2),
         },
+        "consumption_health": consumption_health,
     }
 
 
@@ -99,6 +262,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
     monthly_stats = get_monthly_stats(month)
     insights = get_monthly_insights(month)
     subscription_metrics = get_subscription_monthly_metrics(month)
+    budget_health = get_budget_health_profile(month)
     months = month_sequence(month, count=3)
 
     total_expense = float(monthly_stats.get("total_expense", 0) or 0)
@@ -108,6 +272,8 @@ def get_analysis_dashboard_data(month: str) -> dict:
     subscription_ratio = (subscription_cost / total_expense * 100) if total_expense > 0 else 0.0
     impulsive_ratio = float(insights.get("impulsive_spending_ratio", {}).get("ratio", 0) or 0)
     learning_ratio = float(insights.get("learning_investment_ratio", {}).get("ratio", 0) or 0)
+    consumption_health = insights.get("consumption_health", {})
+    consumption_health_score = float(consumption_health.get("score", 0) or 0)
 
     top_category = (monthly_stats.get("category_stats") or [{}])[0].get("name", "其他")
     if balance >= 0:
@@ -271,6 +437,16 @@ def get_analysis_dashboard_data(month: str) -> dict:
             }
         )
 
+    for hint in budget_health.get("risk_hints", [])[:2]:
+        risk_items.append(
+            {
+                "key": "budget_category_risk",
+                "level": "medium",
+                "title": "预算风险类别",
+                "message": hint,
+            }
+        )
+
     return {
         "month": month,
         "kpi": {
@@ -279,8 +455,11 @@ def get_analysis_dashboard_data(month: str) -> dict:
             "balance": round(balance, 2),
             "subscription_estimated_cost": round(subscription_cost, 2),
             "subscription_ratio": round(subscription_ratio, 2),
+            "consumption_health_score": round(consumption_health_score, 2),
+            "consumption_health_level": consumption_health.get("level", "一般"),
             "summary_sentence": summary_sentence,
         },
+        "consumption_health": consumption_health,
         "structure": {
             "category_stats": monthly_stats.get("category_stats", []),
             "tag_stats": this_month_tag_stats,
@@ -305,6 +484,8 @@ def get_analysis_dashboard_data(month: str) -> dict:
             },
             "total_expense_trend": total_expense_trend,
             "subscription_cost_trend": subscription_cost_trend,
+            "budget_execution_trend": budget_health.get("trends", {}).get("execution", []),
+            "budget_category_deviation": budget_health.get("trends", {}).get("category_deviation", []),
         },
         "risks": {
             "abnormal_high_expense_days": abnormal_days,
@@ -314,6 +495,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
             "subscription_ratio": round(subscription_ratio, 2),
             "items": risk_items,
         },
+        "budget": budget_health,
         "raw": {
             "monthly_stats": monthly_stats,
             "insights": insights,
@@ -355,10 +537,12 @@ def get_ai_archives(month: str, limit: int = 10) -> list[dict]:
 
 
 def get_ai_monthly_package(month: str) -> dict:
+    insights = get_monthly_insights(month)
     return {
         "month": month,
         "monthly_stats": get_monthly_stats(month),
-        "insights": get_monthly_insights(month),
+        "insights": insights,
+        "consumption_health": insights.get("consumption_health", {}),
         "budgets": get_budget_execution(month),
         "subscriptions": get_subscription_monthly_recap(month),
     }
