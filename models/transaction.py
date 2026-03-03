@@ -332,3 +332,77 @@ def get_recent_average_month_expense(month: str, count: int = 3) -> float:
     if not amounts:
         return 0.0
     return round(sum(amounts) / len(amounts), 2)
+
+
+def get_calendar_daily_expense(month: str) -> dict:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                date,
+                ROUND(SUM(amount), 2) AS total_expense,
+                COUNT(*) AS expense_count
+            FROM transactions
+            WHERE type = 'expense' AND substr(date, 1, 7) = ?
+            GROUP BY date
+            ORDER BY date ASC
+            """,
+            (month,),
+        ).fetchall()
+
+    days = []
+    max_expense = 0.0
+    for row in rows:
+        amount = round(float(row["total_expense"] or 0), 2)
+        max_expense = max(max_expense, amount)
+        days.append(
+            {
+                "date": row["date"],
+                "total_expense": amount,
+                "expense_count": int(row["expense_count"] or 0),
+            }
+        )
+
+    return {
+        "month": month,
+        "max_expense": round(max_expense, 2),
+        "days": days,
+    }
+
+
+def get_calendar_day_details(target_date: str) -> dict:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                id,
+                amount,
+                type,
+                date,
+                category_main,
+                category_sub,
+                tags,
+                note,
+                created_at
+            FROM transactions
+            WHERE type = 'expense' AND date = ?
+            ORDER BY id DESC
+            """,
+            (target_date,),
+        ).fetchall()
+
+    transactions = []
+    total_expense = 0.0
+    for row in rows:
+        item = dict(row)
+        item["amount"] = round(float(item["amount"] or 0), 2)
+        item["tags"] = parse_tags(item.get("tags"))
+        total_expense += item["amount"]
+        transactions.append(item)
+
+    return {
+        "date": target_date,
+        "total_expense": round(total_expense, 2),
+        "expense_count": len(transactions),
+        "transactions": transactions,
+    }

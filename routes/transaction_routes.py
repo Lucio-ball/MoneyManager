@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from flask import Blueprint, jsonify, render_template, request
 
@@ -10,6 +10,8 @@ from services.subscription_service import (
     get_upcoming_subscriptions,
 )
 from services.transaction_service import (
+    get_calendar_daily_expense,
+    get_calendar_day_details,
     create_transaction,
     get_category_trend,
     get_monthly_dashboard_data,
@@ -69,6 +71,16 @@ def index():
     )
 
 
+@bp.route("/calendar", endpoint="calendar_page")
+def calendar_page():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    return render_template(
+        "calendar.html",
+        active_page="calendar",
+        month=month,
+    )
+
+
 @bp.route("/api/transactions", methods=["POST"], endpoint="create_transaction_api")
 def create_transaction_api():
     payload = request.get_json(silent=True) or {}
@@ -115,3 +127,23 @@ def tag_trend_api():
     if not tag_name:
         return jsonify({"error": "name is required"}), 400
     return jsonify(get_tag_trend(tag_name, month))
+
+
+@bp.route("/api/calendar", methods=["GET"], endpoint="calendar_summary_api")
+def calendar_summary_api():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    return jsonify(get_calendar_daily_expense(month))
+
+
+@bp.route("/api/calendar/day", methods=["GET"], endpoint="calendar_day_details_api")
+def calendar_day_details_api():
+    target_date = (request.args.get("date") or "").strip()
+    if not target_date:
+        return jsonify({"error": "date is required"}), 400
+
+    try:
+        datetime.strptime(target_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "date format must be YYYY-MM-DD"}), 400
+
+    return jsonify(get_calendar_day_details(target_date))

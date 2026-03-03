@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
 from models.transaction import (
+    get_calendar_daily_expense,
+    get_calendar_day_details,
     create_transaction,
     get_category_trend,
     get_monthly_dashboard_data,
@@ -86,4 +88,6 @@ __all__ = [
     "get_today_expense",
     "get_transactions_by_month",
     "get_recent_average_month_expense",
+    "get_calendar_daily_expense",
+    "get_calendar_day_details",
 ]

@@ -671,6 +671,74 @@ textarea.code {
   color: var(--danger);
 }
 
+.calendar-week-header {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.calendar-week-header span {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-day-cell {
+  min-height: 92px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #FCFDFF;
+  padding: 8px;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  transition: var(--transition);
+}
+
+.calendar-day-cell.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.calendar-day-cell.is-empty {
+  background: transparent;
+  border-style: dashed;
+}
+
+.calendar-day-btn {
+  width: fit-content;
+  border: none;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.calendar-day-btn:hover {
+  color: var(--primary);
+}
+
+.calendar-day-amount {
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-heat-0 { background: #FCFDFF; }
+.calendar-heat-1 { background: color-mix(in srgb, var(--primary) 10%, #FFFFFF); }
+.calendar-heat-2 { background: color-mix(in srgb, var(--primary) 18%, #FFFFFF); }
+.calendar-heat-3 { background: color-mix(in srgb, var(--primary) 28%, #FFFFFF); }
+.calendar-heat-4 { background: color-mix(in srgb, var(--primary) 38%, #FFFFFF); }
+.calendar-heat-5 { background: color-mix(in srgb, var(--primary) 50%, #FFFFFF); }
+
 @media (max-width: 1180px) {
   .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
