@@ -19,6 +19,7 @@
           <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
           <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
           <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
           <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
@@ -107,6 +108,31 @@
               <div class="section-insight">洞察：优先处理“刚需类超支”与“高频冲动消费”组合项，改善会最明显。</div>
               {% else %}
               <div class="helper-text">当前月未识别到明显预算风险类别。</div>
+              {% endif %}
+            </article>
+
+            <article class="panel">
+              <h2 class="section-title">目标进度</h2>
+              {% if goal_summary.next_goal %}
+              <div class="kpi-label" style="margin-top: 8px;">
+                目标总数：{{ goal_summary.total_count }} ｜ 进行中：{{ goal_summary.active_count }} ｜ 落后：{{ goal_summary.behind_count }}
+              </div>
+              <div class="category-list" style="margin-top: 10px;">
+                <div class="category-item">
+                  <div class="category-main">
+                    <div class="category-name">{{ goal_summary.next_goal.name }}</div>
+                    <div class="small">截止 {{ goal_summary.next_goal.deadline }} · 预期 {{ '%.2f'|format(goal_summary.next_goal.expected_progress_rate) }}%</div>
+                  </div>
+                  <div class="mono" style="text-align: right;">
+                    <div>{{ '%.2f'|format(goal_summary.next_goal.progress_rate) }}%</div>
+                    <div class="small">每月需存 ¥{{ '%.2f'|format(goal_summary.next_goal.monthly_required) }}</div>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top: 10px;"><a class="btn-secondary" href="/goals">进入目标管理</a></div>
+              {% else %}
+              <div class="helper-text">暂无目标，点击下方按钮创建第一个目标。</div>
+              <div style="margin-top: 10px;"><a class="btn-secondary" href="/goals">创建目标</a></div>
               {% endif %}
             </article>
 

@@ -7,6 +7,7 @@ from extensions.database import init_db
 from routes.ai_routes import bp as ai_bp
 from routes.analysis_routes import bp as analysis_bp
 from routes.budget_routes import bp as budget_bp
+from routes.goal_routes import bp as goal_bp
 from routes.subscription_routes import bp as subscription_bp
 from routes.transaction_routes import bp as transaction_bp
 from services.subscription_service import process_due_subscription_charges
@@ -31,6 +32,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(transaction_bp)
     app.register_blueprint(budget_bp)
+    app.register_blueprint(goal_bp)
     app.register_blueprint(subscription_bp)
     app.register_blueprint(analysis_bp)
     app.register_blueprint(ai_bp)

@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from services.analysis_service import get_monthly_insights
 from services.budget_service import get_budget_execution, get_budget_health_profile
+from services.goal_service import get_goal_dashboard_summary
 from services.subscription_service import (
     get_subscription_monthly_cost_summary,
     get_subscription_monthly_metrics,
@@ -51,6 +52,7 @@ def index():
     subscription_upcoming = get_upcoming_subscriptions(days=7)[:3]
     recent_records = get_recent_transactions(limit=10)
     consumption_health = get_monthly_insights(month).get("consumption_health", {})
+    goal_summary = get_goal_dashboard_summary()
 
     return render_template(
         "index.html",
@@ -68,6 +70,7 @@ def index():
         recent_records=recent_records,
         consumption_health=consumption_health,
         budget_health=budget_health,
+        goal_summary=goal_summary,
     )
 
 
