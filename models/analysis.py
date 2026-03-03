@@ -159,6 +159,134 @@ def _calculate_consumption_health(
     }
 
 
+def _build_consumption_persona(
+    month: str,
+    total_expense: float,
+    records: list[dict],
+    monthly_stats: dict,
+    month_total_map: dict[str, float],
+    consumption_health: dict,
+) -> dict:
+    if total_expense <= 0:
+        return {
+            "type": "steady",
+            "label": "稳健型",
+            "description": "本月消费记录较少，整体支出节奏平稳，建议继续观察并保持记账完整性。",
+            "reasons": ["本月总支出较低或暂无支出，未出现明显高风险消费信号。"],
+            "scores": {
+                "impulsive": 0.0,
+                "steady": 80.0,
+                "learning_investor": 0.0,
+                "social_driven": 0.0,
+                "subscription_pressure": 0.0,
+            },
+            "metrics": {
+                "impulsive_ratio": 0.0,
+                "learning_ratio": 0.0,
+                "social_ratio": 0.0,
+                "subscription_ratio": 0.0,
+                "trend_growth_ratio": 0.0,
+                "top_category_ratio": 0.0,
+            },
+        }
+
+    health_score = float(consumption_health.get("score", 0) or 0)
+    health_metrics = consumption_health.get("metrics", {})
+    impulsive_ratio = float(health_metrics.get("impulsive_ratio", 0) or 0)
+    learning_ratio = float(health_metrics.get("learning_ratio", 0) or 0)
+
+    category_stats = monthly_stats.get("category_stats", [])
+    top_category_ratio = float((category_stats[0].get("ratio") if category_stats else 0) or 0)
+
+    monthly_subscription_cost = float(get_subscription_monthly_metrics(month).get("estimated_monthly_cost", 0) or 0)
+    subscription_ratio = (monthly_subscription_cost / total_expense * 100) if total_expense > 0 else 0.0
+
+    months = sorted(month_total_map.keys())
+    first_month_total = float(month_total_map.get(months[0], 0) or 0) if months else 0.0
+    current_month_total = float(month_total_map.get(month, 0) or 0)
+    if first_month_total > 0:
+        trend_growth_ratio = (current_month_total - first_month_total) / first_month_total * 100
+    else:
+        trend_growth_ratio = 0.0
+
+    social_tag_set = {"社交", "人情", "聚会", "请客", "社交活动"}
+    social_category_keywords = ("社交", "聚会", "娱乐", "餐饮", "人情")
+    social_amount = 0.0
+    for row in records:
+        if row.get("type") != "expense":
+            continue
+        amount = float(row.get("amount") or 0)
+        tags = set(row.get("tags", []))
+        category_name = str(row.get("category_main") or "")
+        if tags.intersection(social_tag_set) or any(keyword in category_name for keyword in social_category_keywords):
+            social_amount += amount
+    social_ratio = (social_amount / total_expense * 100) if total_expense > 0 else 0.0
+
+    persona_scores = {
+        "impulsive": _clamp_score(impulsive_ratio * 1.8 + max(trend_growth_ratio, 0) * 0.6 + (100 - health_score) * 0.15),
+        "steady": _clamp_score(health_score * 0.8 + max(0, 25 - impulsive_ratio) * 1.4 + max(0, 15 - abs(trend_growth_ratio)) * 1.1),
+        "learning_investor": _clamp_score(learning_ratio * 4.2 + max(0, 30 - impulsive_ratio) * 1.0 + health_score * 0.25),
+        "social_driven": _clamp_score(social_ratio * 3.1 + max(0, trend_growth_ratio) * 0.3 + max(0, 35 - health_score) * 0.5),
+        "subscription_pressure": _clamp_score(subscription_ratio * 3.8 + max(0, trend_growth_ratio) * 0.5 + top_category_ratio * 0.4),
+    }
+
+    persona_meta = {
+        "impulsive": {
+            "label": "冲动型",
+            "description": "消费决策受即时情绪和短期刺激影响较大，建议通过延迟购买和上限约束来降温。",
+        },
+        "steady": {
+            "label": "稳健型",
+            "description": "支出结构和节奏整体稳定，具备较好的预算执行习惯，建议继续保持并做小幅优化。",
+        },
+        "learning_investor": {
+            "label": "学习投资型",
+            "description": "愿意把预算投入长期能力建设，具备成长型消费倾向，建议继续关注投入产出比。",
+        },
+        "social_driven": {
+            "label": "社交驱动型",
+            "description": "消费较多由社交场景触发，建议为社交预算设置独立上限，避免被动超支。",
+        },
+        "subscription_pressure": {
+            "label": "订阅压力型",
+            "description": "固定订阅成本对月度支出形成持续压力，建议优先清理低使用率订阅。",
+        },
+    }
+
+    persona_type = max(persona_scores.items(), key=lambda item: item[1])[0]
+
+    reasons: list[str] = []
+    if impulsive_ratio >= 30:
+        reasons.append(f"冲动消费占比 {impulsive_ratio:.2f}% 偏高，拉升了短期消费风险。")
+    if learning_ratio >= 12:
+        reasons.append(f"学习投资占比 {learning_ratio:.2f}% 较高，体现长期成长导向。")
+    if social_ratio >= 30:
+        reasons.append(f"社交相关支出占比 {social_ratio:.2f}% 较高，消费受场景驱动明显。")
+    if subscription_ratio >= 15:
+        reasons.append(f"订阅支出占比 {subscription_ratio:.2f}% 偏高，固定成本压力需持续关注。")
+    if abs(trend_growth_ratio) >= 15:
+        trend_text = "上升" if trend_growth_ratio > 0 else "下降"
+        reasons.append(f"近 3 个月总支出呈 {trend_text} 趋势（{trend_growth_ratio:.2f}%）。")
+    if not reasons:
+        reasons.append("本月支出结构相对均衡，未出现明显单一风险驱动。")
+
+    return {
+        "type": persona_type,
+        "label": persona_meta[persona_type]["label"],
+        "description": persona_meta[persona_type]["description"],
+        "reasons": reasons[:3],
+        "scores": persona_scores,
+        "metrics": {
+            "impulsive_ratio": round(impulsive_ratio, 2),
+            "learning_ratio": round(learning_ratio, 2),
+            "social_ratio": round(social_ratio, 2),
+            "subscription_ratio": round(subscription_ratio, 2),
+            "trend_growth_ratio": round(trend_growth_ratio, 2),
+            "top_category_ratio": round(top_category_ratio, 2),
+        },
+    }
+
+
 def get_monthly_insights(month: str) -> dict:
     monthly_stats = get_monthly_stats(month)
     total_expense = monthly_stats["total_expense"]
@@ -241,6 +369,14 @@ def get_monthly_insights(month: str) -> dict:
         impulsive_amount=float(impulsive_amount),
         learning_amount=float(learning_amount),
     )
+    consumption_persona = _build_consumption_persona(
+        month=month,
+        total_expense=float(total_expense or 0),
+        records=records,
+        monthly_stats=monthly_stats,
+        month_total_map=month_total_map,
+        consumption_health=consumption_health,
+    )
 
     return {
         "month": month,
@@ -255,6 +391,7 @@ def get_monthly_insights(month: str) -> dict:
             "ratio": round(learning_ratio, 2),
         },
         "consumption_health": consumption_health,
+        "consumption_persona": consumption_persona,
     }
 
 
@@ -273,6 +410,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
     impulsive_ratio = float(insights.get("impulsive_spending_ratio", {}).get("ratio", 0) or 0)
     learning_ratio = float(insights.get("learning_investment_ratio", {}).get("ratio", 0) or 0)
     consumption_health = insights.get("consumption_health", {})
+    consumption_persona = insights.get("consumption_persona", {})
     consumption_health_score = float(consumption_health.get("score", 0) or 0)
 
     top_category = (monthly_stats.get("category_stats") or [{}])[0].get("name", "其他")
@@ -460,6 +598,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
             "summary_sentence": summary_sentence,
         },
         "consumption_health": consumption_health,
+        "consumption_persona": consumption_persona,
         "structure": {
             "category_stats": monthly_stats.get("category_stats", []),
             "tag_stats": this_month_tag_stats,
@@ -543,6 +682,7 @@ def get_ai_monthly_package(month: str) -> dict:
         "monthly_stats": get_monthly_stats(month),
         "insights": insights,
         "consumption_health": insights.get("consumption_health", {}),
+        "consumption_persona": insights.get("consumption_persona", {}),
         "budgets": get_budget_execution(month),
         "subscriptions": get_subscription_monthly_recap(month),
     }

@@ -33,6 +33,7 @@
     <main class="app-shell">
       <div class="page">
       {% set consumption_health = ai_package.consumption_health if ai_package and ai_package.consumption_health else (ai_package.insights.consumption_health if ai_package and ai_package.insights else {}) %}
+      {% set consumption_persona = ai_package.consumption_persona if ai_package and ai_package.consumption_persona else (ai_package.insights.consumption_persona if ai_package and ai_package.insights else {}) %}
       <section class="panel">
         <h1 class="page-title">AI 月度复盘</h1>
         <div class="page-subtitle">当前月份：{{ month }}</div>
@@ -78,6 +79,28 @@
         </div>
         {% else %}
         <div class="helper-text" style="margin-top: 10px;">当前月份暂无足够数据生成消费健康度维度。</div>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">消费性格描述</h2>
+        <div class="category-item" style="margin-top: 12px;">
+          <div class="category-main">
+            <div class="category-name">{{ consumption_persona.label or '稳健型' }}</div>
+            <div class="small">{{ consumption_persona.description or '当前消费模式较平稳，建议继续保持并跟踪结构变化。' }}</div>
+          </div>
+        </div>
+        {% if consumption_persona.reasons %}
+        <div class="category-list" style="margin-top: 10px;">
+          {% for reason in consumption_persona.reasons %}
+          <div class="category-item">
+            <div class="category-main">
+              <div class="category-name">画像依据</div>
+              <div class="small">{{ reason }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
         {% endif %}
       </section>
 

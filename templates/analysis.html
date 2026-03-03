@@ -37,6 +37,7 @@
     {% set trends = analysis_data.trends %}
     {% set risks = analysis_data.risks %}
     {% set consumption_health = analysis_data.consumption_health %}
+    {% set consumption_persona = analysis_data.consumption_persona %}
 
     <main class="app-shell">
       <div class="page">
@@ -100,6 +101,39 @@
           <div class="helper-text">当前月份暂无可计算的消费健康度维度数据。</div>
           {% endif %}
           <div class="section-insight">洞察：优先修复最低分维度，通常能在 1-2 个账单周期内显著改善总分。</div>
+        </section>
+
+        <section class="panel analysis-block">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title">消费行为画像</h2>
+              <div class="section-desc">基于消费结构、标签结构、趋势与冲动比例自动识别当前消费性格。</div>
+            </div>
+          </div>
+          <div class="category-item" style="margin-top: 10px;">
+            <div class="category-main">
+              <div class="category-name">{{ consumption_persona.label or '稳健型' }}</div>
+              <div class="small">{{ consumption_persona.description or '当前消费模式较稳定，建议持续跟踪关键指标。' }}</div>
+            </div>
+          </div>
+          {% if consumption_persona.reasons %}
+          <div class="category-list" style="margin-top: 10px;">
+            {% for reason in consumption_persona.reasons %}
+            <div class="category-item">
+              <div class="category-main">
+                <div class="category-name">判定依据</div>
+                <div class="small">{{ reason }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="small" style="margin-top: 10px;">
+            冲动占比 {{ '%.2f'|format((consumption_persona.metrics.impulsive_ratio if consumption_persona.metrics else 0)) }}%
+            ｜ 学习投资 {{ '%.2f'|format((consumption_persona.metrics.learning_ratio if consumption_persona.metrics else 0)) }}%
+            ｜ 社交驱动 {{ '%.2f'|format((consumption_persona.metrics.social_ratio if consumption_persona.metrics else 0)) }}%
+            ｜ 订阅占比 {{ '%.2f'|format((consumption_persona.metrics.subscription_ratio if consumption_persona.metrics else 0)) }}%
+          </div>
         </section>
 
         <section class="grid-2">
