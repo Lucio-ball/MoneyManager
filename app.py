@@ -106,6 +106,68 @@ def _build_subscription_payload(data: dict) -> dict | None:
     }
 
 
+def _normalize_transaction_payload(data: dict, tags: list[str] | None = None) -> tuple[dict | None, str | None]:
+    amount_raw = data.get("amount")
+    try:
+        amount = float(amount_raw) if amount_raw is not None else 0.0
+    except (TypeError, ValueError):
+        return None, "invalid amount"
+
+    if amount <= 0:
+        return None, "amount must be greater than 0"
+
+    tx_type = str(data.get("type", "expense")).strip()
+    if tx_type not in ("expense", "income"):
+        tx_type = "expense"
+
+    tx_date = str(data.get("date") or date.today().isoformat()).strip()
+    try:
+        datetime.strptime(tx_date, "%Y-%m-%d")
+    except ValueError:
+        return None, "invalid date"
+
+    note = str(data.get("note", "")).strip()
+
+    if tx_type == "income":
+        income_source = str(data.get("income_source", "")).strip() or str(
+            data.get("category_sub", "")
+        ).strip()
+        if not income_source:
+            return None, "income_source is required for income"
+        return (
+            {
+                "amount": amount,
+                "type": "income",
+                "date": tx_date,
+                "category_main": "收入",
+                "category_sub": income_source,
+                "tags": [],
+                "note": note,
+            },
+            None,
+        )
+
+    category_main = str(data.get("category_main", "")).strip()
+    if not category_main:
+        return None, "category_main is required for expense"
+
+    category_sub = str(data.get("category_sub", "")).strip()
+    normalized_tags = [str(tag).strip() for tag in (tags or []) if str(tag).strip()]
+
+    return (
+        {
+            "amount": amount,
+            "type": "expense",
+            "date": tx_date,
+            "category_main": category_main,
+            "category_sub": category_sub,
+            "tags": normalized_tags,
+            "note": note,
+        },
+        None,
+    )
+
+
 def build_emotion_light(month: str, total_expense: float, budget_data: dict) -> dict:
     total_budget_item = next(
         (item for item in budget_data.get("items", []) if item.get("category_main") is None),
@@ -208,18 +270,18 @@ def create_app() -> Flask:
     @app.route("/add", methods=["GET", "POST"])
     def add_transaction_page():
         if request.method == "POST":
-            form_data = {
+            raw_form_data = {
                 "amount": request.form.get("amount", type=float),
                 "type": request.form.get("type", "expense"),
                 "date": request.form.get("date") or date.today().isoformat(),
                 "category_main": request.form.get("category_main", ""),
                 "category_sub": request.form.get("category_sub", "").strip(),
-                "tags": request.form.getlist("tags"),
-                "payment_method": request.form.get("payment_method", ""),
+                "income_source": request.form.get("income_source", "").strip(),
                 "note": request.form.get("note", "").strip(),
             }
+            form_data, _error = _normalize_transaction_payload(raw_form_data, request.form.getlist("tags"))
 
-            if form_data["amount"] and form_data["category_main"]:
+            if form_data:
                 create_transaction(form_data)
                 return redirect(url_for("add_transaction_page", success="1"))
 
@@ -395,20 +457,16 @@ def create_app() -> Flask:
     @app.route("/api/transactions", methods=["POST"])
     def create_transaction_api():
         payload = request.get_json(silent=True) or {}
-        required_fields = ["amount", "type", "date", "category_main"]
-        if any(field not in payload or payload[field] in (None, "") for field in required_fields):
-            return jsonify({"error": "missing required fields"}), 400
+        if payload.get("amount") in (None, "") or payload.get("date") in (None, ""):
+            return jsonify({"error": "amount and date are required"}), 400
 
-        transaction_data = {
-            "amount": payload.get("amount"),
-            "type": payload.get("type", "expense"),
-            "date": payload.get("date"),
-            "category_main": payload.get("category_main", ""),
-            "category_sub": payload.get("category_sub", ""),
-            "tags": payload.get("tags", []),
-            "payment_method": payload.get("payment_method", ""),
-            "note": payload.get("note", ""),
-        }
+        tags = payload.get("tags", [])
+        if not isinstance(tags, list):
+            tags = []
+
+        transaction_data, error = _normalize_transaction_payload(payload, tags)
+        if not transaction_data:
+            return jsonify({"error": error or "invalid payload"}), 400
 
         created_id = create_transaction(transaction_data)
         return jsonify({"id": created_id}), 201

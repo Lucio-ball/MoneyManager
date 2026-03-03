@@ -32,7 +32,6 @@ def init_db() -> None:
                 category_main TEXT NOT NULL,
                 category_sub TEXT,
                 tags TEXT,
-                payment_method TEXT CHECK(payment_method IN ('wechat', 'alipay_family', 'bank')),
                 note TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -102,6 +101,51 @@ def init_db() -> None:
             );
             """
         )
+        transaction_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()
+        }
+        if "payment_method" in transaction_columns:
+            conn.executescript(
+                """
+                CREATE TABLE transactions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    amount REAL NOT NULL,
+                    type TEXT CHECK(type IN ('income', 'expense')) NOT NULL,
+                    date TEXT NOT NULL,
+                    category_main TEXT NOT NULL,
+                    category_sub TEXT,
+                    tags TEXT,
+                    note TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO transactions_new (
+                    id,
+                    amount,
+                    type,
+                    date,
+                    category_main,
+                    category_sub,
+                    tags,
+                    note,
+                    created_at
+                )
+                SELECT
+                    id,
+                    amount,
+                    type,
+                    date,
+                    category_main,
+                    category_sub,
+                    tags,
+                    note,
+                    created_at
+                FROM transactions;
+
+                DROP TABLE transactions;
+                ALTER TABLE transactions_new RENAME TO transactions;
+                """
+            )
         conn.commit()
 
 
@@ -120,9 +164,8 @@ def create_transaction(transaction: dict) -> int:
                 category_main,
                 category_sub,
                 tags,
-                payment_method,
                 note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 float(transaction["amount"]),
@@ -131,7 +174,6 @@ def create_transaction(transaction: dict) -> int:
                 transaction["category_main"],
                 transaction.get("category_sub") or None,
                 tags_json,
-                transaction.get("payment_method") or None,
                 transaction.get("note") or None,
             ),
         )
@@ -152,7 +194,6 @@ def get_recent_transactions(limit: int = 10) -> list[dict]:
                 category_main,
                 category_sub,
                 tags,
-                payment_method,
                 note,
                 created_at
             FROM transactions
@@ -302,7 +343,6 @@ def _build_subscription_charge_transaction(subscription: dict, billing_date: dat
         "category_main": subscription.get("category") or "其他",
         "category_sub": "订阅扣费",
         "tags": ["订阅", "自动扣费"],
-        "payment_method": subscription.get("payment_method") or None,
         "note": f"[订阅自动扣费] {subscription.get('name', '')}",
     }
 
@@ -348,9 +388,8 @@ def _create_subscription_charge_if_needed(conn: sqlite3.Connection, subscription
             category_main,
             category_sub,
             tags,
-            payment_method,
             note
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             transaction["amount"],
@@ -359,7 +398,6 @@ def _create_subscription_charge_if_needed(conn: sqlite3.Connection, subscription
             transaction["category_main"],
             transaction["category_sub"],
             json.dumps(transaction["tags"], ensure_ascii=False),
-            transaction["payment_method"],
             transaction["note"],
         ),
     )
@@ -469,7 +507,6 @@ def get_transactions_by_month(month: str) -> list[dict]:
                 category_main,
                 category_sub,
                 tags,
-                payment_method,
                 note,
                 created_at
             FROM transactions
