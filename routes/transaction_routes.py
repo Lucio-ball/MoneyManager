@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from services.analysis_service import get_monthly_insights
 from services.budget_service import get_budget_execution, get_budget_health_profile
+from services.dashboard_service import get_home_risk_cards
 from services.goal_service import get_goal_dashboard_summary
 from services.subscription_service import (
     get_subscription_monthly_cost_summary,
@@ -53,6 +54,10 @@ def index():
     recent_records = get_recent_transactions(limit=10)
     consumption_health = get_monthly_insights(month).get("consumption_health", {})
     goal_summary = get_goal_dashboard_summary()
+    home_risk_cards = get_home_risk_cards(
+        month=month,
+        total_expense=float(dashboard["summary"].get("total_expense", 0) or 0),
+    )
 
     return render_template(
         "index.html",
@@ -71,6 +76,7 @@ def index():
         consumption_health=consumption_health,
         budget_health=budget_health,
         goal_summary=goal_summary,
+        home_risk_cards=home_risk_cards,
     )
 
 
@@ -112,6 +118,14 @@ def list_transactions_api():
 def monthly_stats_api():
     month = request.args.get("month") or date.today().strftime("%Y-%m")
     return jsonify(get_monthly_stats(month))
+
+
+@bp.route("/api/dashboard/risk-cards", methods=["GET"], endpoint="dashboard_risk_cards_api")
+def dashboard_risk_cards_api():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    dashboard = get_monthly_dashboard_data(month=month)
+    total_expense = float(dashboard.get("summary", {}).get("total_expense", 0) or 0)
+    return jsonify(get_home_risk_cards(month=month, total_expense=total_expense))
 
 
 @bp.route("/api/stats/category", methods=["GET"], endpoint="category_trend_api")

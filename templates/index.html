@@ -68,6 +68,20 @@
             <div class="kpi-value mono">{{ '%.2f'|format(consumption_health.score or 0) }}</div>
             <div class="small">{{ consumption_health.level or '一般' }} · 冲动占比 {{ '%.2f'|format((consumption_health.metrics.impulsive_ratio if consumption_health.metrics else 0)) }}%</div>
           </article>
+          <article class="kpi-card">
+            <div class="kpi-label">订阅压力</div>
+            <div class="kpi-value mono" id="subscription-pressure-cost">¥{{ '%.2f'|format(home_risk_cards.subscription_pressure.monthly_cost) }}</div>
+            <div class="small" id="subscription-pressure-ratio">占本月总支出 {{ '%.2f'|format(home_risk_cards.subscription_pressure.ratio) }}%</div>
+            <div class="small" id="subscription-pressure-level">风险等级：{{ home_risk_cards.subscription_pressure.risk_level }}</div>
+            <div style="height: 120px; margin-top: 8px;"><canvas id="subscriptionPressureChart"></canvas></div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">预算风险</div>
+            <div class="kpi-value mono" id="budget-risk-rate">执行率 {{ '%.2f'|format(home_risk_cards.budget_risk.execution_rate) }}%</div>
+            <div class="small" id="budget-risk-categories">风险类别：{{ home_risk_cards.budget_risk.risk_categories | join(' / ') if home_risk_cards.budget_risk.risk_categories else '暂无' }}</div>
+            <div class="small" id="budget-risk-forecast">预测：{{ '预计会超支' if home_risk_cards.budget_risk.will_overspend else '预计可控' }}（期末 {{ '%.2f'|format(home_risk_cards.budget_risk.projected_execution_rate) }}%）</div>
+            <div style="height: 120px; margin-top: 8px;"><canvas id="budgetRiskChart"></canvas></div>
+          </article>
         </section>
 
         <section class="layout-main">
@@ -245,7 +259,7 @@
     {% include '_fab_transaction.html' %}
 
     <script id="dashboard-data" type="application/json">
-      {{ {'daily_expense': daily_expense, 'category_share': category_share} | tojson }}
+      {{ {'daily_expense': daily_expense, 'category_share': category_share, 'month': month, 'home_risk_cards': home_risk_cards} | tojson }}
     </script>
 
     <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
@@ -254,11 +268,126 @@
       const dashboardDataElement = document.getElementById("dashboard-data");
       const dashboardData = dashboardDataElement
         ? JSON.parse(dashboardDataElement.textContent)
-        : { daily_expense: [], category_share: [] };
+        : { daily_expense: [], category_share: [], month: "", home_risk_cards: {} };
       const chartTheme = window.MMChartTheme;
 
       const dailyExpense = dashboardData.daily_expense || [];
       const categoryShare = dashboardData.category_share || [];
+      let subscriptionPressureChartInstance = null;
+      let budgetRiskChartInstance = null;
+
+      function renderRiskCardCharts(riskCards) {
+        const subscription = (riskCards && riskCards.subscription_pressure) || {};
+        const budget = (riskCards && riskCards.budget_risk) || {};
+
+        const ratio = Number(subscription.ratio || 0);
+        const ratioClamped = Math.max(0, Math.min(100, ratio));
+        const executionRate = Number(budget.execution_rate || 0);
+        const executionClamped = Math.max(0, Math.min(100, executionRate));
+
+        const subscriptionCanvas = document.getElementById("subscriptionPressureChart");
+        if (subscriptionCanvas) {
+          if (subscriptionPressureChartInstance) {
+            subscriptionPressureChartInstance.destroy();
+          }
+          subscriptionPressureChartInstance = new Chart(subscriptionCanvas, {
+            type: "doughnut",
+            data: {
+              labels: ["订阅占比", "其他支出"],
+              datasets: [
+                {
+                  data: [ratioClamped, Math.max(0, 100 - ratioClamped)],
+                  borderWidth: 0,
+                  backgroundColor: ["#0EA5E9", chartTheme.alpha("#64748B", 0.24)],
+                },
+              ],
+            },
+            options: {
+              ...chartTheme.pieOptions(),
+              cutout: "68%",
+            },
+          });
+        }
+
+        const budgetCanvas = document.getElementById("budgetRiskChart");
+        if (budgetCanvas) {
+          if (budgetRiskChartInstance) {
+            budgetRiskChartInstance.destroy();
+          }
+          const budgetColor = executionRate >= 100 ? "#EF4444" : executionRate >= 85 ? "#F59E0B" : "#22C55E";
+          budgetRiskChartInstance = new Chart(budgetCanvas, {
+            type: "doughnut",
+            data: {
+              labels: ["预算执行", "预算余量"],
+              datasets: [
+                {
+                  data: [executionClamped, Math.max(0, 100 - executionClamped)],
+                  borderWidth: 0,
+                  backgroundColor: [budgetColor, chartTheme.alpha("#64748B", 0.24)],
+                },
+              ],
+            },
+            options: {
+              ...chartTheme.pieOptions(),
+              cutout: "68%",
+            },
+          });
+        }
+      }
+
+      function updateRiskCardText(riskCards) {
+        const subscription = (riskCards && riskCards.subscription_pressure) || {};
+        const budget = (riskCards && riskCards.budget_risk) || {};
+
+        const costElement = document.getElementById("subscription-pressure-cost");
+        const ratioElement = document.getElementById("subscription-pressure-ratio");
+        const levelElement = document.getElementById("subscription-pressure-level");
+        const executionElement = document.getElementById("budget-risk-rate");
+        const categoriesElement = document.getElementById("budget-risk-categories");
+        const forecastElement = document.getElementById("budget-risk-forecast");
+
+        if (costElement) {
+          costElement.textContent = `¥${Number(subscription.monthly_cost || 0).toFixed(2)}`;
+        }
+        if (ratioElement) {
+          ratioElement.textContent = `占本月总支出 ${Number(subscription.ratio || 0).toFixed(2)}%`;
+        }
+        if (levelElement) {
+          levelElement.textContent = `风险等级：${subscription.risk_level || "低"}`;
+        }
+
+        if (executionElement) {
+          executionElement.textContent = `执行率 ${Number(budget.execution_rate || 0).toFixed(2)}%`;
+        }
+        if (categoriesElement) {
+          const categories = Array.isArray(budget.risk_categories) ? budget.risk_categories : [];
+          categoriesElement.textContent = `风险类别：${categories.length ? categories.join(" / ") : "暂无"}`;
+        }
+        if (forecastElement) {
+          const projected = Number(budget.projected_execution_rate || 0).toFixed(2);
+          const text = budget.will_overspend ? "预计会超支" : "预计可控";
+          forecastElement.textContent = `预测：${text}（期末 ${projected}%）`;
+        }
+      }
+
+      async function refreshRiskCards(month) {
+        if (!month) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/dashboard/risk-cards?month=${encodeURIComponent(month)}`);
+          if (!response.ok) {
+            return;
+          }
+          const riskCards = await response.json();
+          updateRiskCardText(riskCards);
+          renderRiskCardCharts(riskCards);
+        } catch (_error) {
+          updateRiskCardText(dashboardData.home_risk_cards || {});
+          renderRiskCardCharts(dashboardData.home_risk_cards || {});
+        }
+      }
 
       if (dailyExpense.length > 0) {
         const dailyCtx = document.getElementById("dailyExpenseChart");
@@ -301,6 +430,10 @@
           options: chartTheme.pieOptions(),
         });
       }
+
+      updateRiskCardText(dashboardData.home_risk_cards || {});
+      renderRiskCardCharts(dashboardData.home_risk_cards || {});
+      refreshRiskCards(dashboardData.month || "");
     </script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>
