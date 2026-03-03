@@ -1,5 +1,8 @@
+from datetime import date
+
 from flask import Flask
 
+from config import CATEGORY_OPTIONS, TAG_OPTIONS
 from extensions.database import init_db
 from routes.ai_routes import bp as ai_bp
 from routes.analysis_routes import bp as analysis_bp
@@ -13,6 +16,14 @@ def create_app() -> Flask:
     app = Flask(__name__)
 
     init_db()
+
+    @app.context_processor
+    def inject_fab_context():
+        return {
+            "fab_category_options": CATEGORY_OPTIONS,
+            "fab_tag_options": TAG_OPTIONS,
+            "fab_today": date.today().isoformat(),
+        }
 
     @app.before_request
     def sync_due_subscription_charges():

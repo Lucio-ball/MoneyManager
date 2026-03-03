@@ -15,7 +15,6 @@
         </a>
         <nav class="nav-links">
           <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
           <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
           <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
           <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
@@ -26,7 +25,7 @@
             <input type="month" name="month" value="{{ month }}" />
             <button class="btn-secondary" type="submit">切换月份</button>
           </form>
-          <a class="btn" href="/add">去记账</a>
+          <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
     </header>
@@ -101,5 +100,7 @@
       </section>
       </div>
     </main>
+    {% include '_fab_transaction.html' %}
+    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>
 </html>

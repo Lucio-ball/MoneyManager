@@ -16,7 +16,6 @@
         </a>
         <nav class="nav-links">
           <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'add' else '' }}" href="/add">记账</a>
           <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
           <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
           <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
@@ -27,7 +26,7 @@
             <input type="month" name="month" value="{{ month }}" />
             <button class="btn-secondary" type="submit">切换月份</button>
           </form>
-          <a class="btn" href="/add">去记账</a>
+          <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
     </header>
@@ -140,10 +139,48 @@
               <div class="helper-text">未来 7 天暂无订阅扣费。</div>
               {% endif %}
             </article>
+
+            <article class="panel">
+              <h2 class="page-title" style="font-size: 18px;">最近记录（10 笔）</h2>
+              <div class="table-wrap" style="margin-top: 10px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>类型</th>
+                      <th>金额</th>
+                      <th>类别</th>
+                      <th>标签</th>
+                      <th>备注</th>
+                    </tr>
+                  </thead>
+                  <tbody id="home-recent-records-body">
+                    {% if recent_records %} {% for row in recent_records %}
+                    <tr>
+                      <td>{{ row.date }}</td>
+                      <td>{{ '支出' if row.type == 'expense' else '收入' }}</td>
+                      <td class="{{ row.type }}">¥{{ '%.2f'|format(row.amount) }}</td>
+                      <td>
+                        {% if row.type == 'income' %} {{ row.category_sub if row.category_sub else '-' }} {% else %} {{
+                        row.category_main }}{% if row.category_sub %} / {{ row.category_sub }}{% endif %} {% endif %}
+                      </td>
+                      <td>{{ row.tags | join('、') if row.tags else '-' }}</td>
+                      <td>{{ row.note if row.note else '-' }}</td>
+                    </tr>
+                    {% endfor %} {% else %}
+                    <tr>
+                      <td colspan="6">暂无记录，先记第一笔吧。</td>
+                    </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            </article>
           </div>
         </section>
       </div>
     </main>
+    {% include '_fab_transaction.html' %}
 
     <script id="dashboard-data" type="application/json">
       {{ {'daily_expense': daily_expense, 'category_share': category_share} | tojson }}
@@ -225,5 +262,6 @@
         });
       }
     </script>
+    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>
 </html>

@@ -1,0 +1,66 @@
+<button type="button" class="fab-trigger" id="fab-trigger" aria-label="快速记账">+
+</button>
+
+<section class="fab-panel" id="fab-panel" aria-hidden="true">
+  <div class="fab-panel-head">
+    <h2>快速记账</h2>
+    <button type="button" class="fab-close" id="fab-close" aria-label="关闭">×</button>
+  </div>
+
+  <form id="fab-transaction-form" class="fab-form">
+    <div>
+      <label class="small" for="fab-amount">金额</label>
+      <input id="fab-amount" type="number" step="0.01" min="0.01" name="amount" placeholder="金额" required />
+    </div>
+
+    <div>
+      <label class="small" for="fab-type">类型</label>
+      <select id="fab-type" name="type">
+        <option value="expense" selected>支出</option>
+        <option value="income">收入</option>
+      </select>
+    </div>
+
+    <div id="fab-expense-category-main">
+      <label class="small" for="fab-category-main">主类别</label>
+      <select id="fab-category-main" name="category_main" required>
+        <option value="">请选择主类别</option>
+        {% for category in fab_category_options %}
+        <option value="{{ category }}">{{ category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="fab-expense-category-sub">
+      <label class="small" for="fab-category-sub">子类别</label>
+      <input id="fab-category-sub" type="text" name="category_sub" placeholder="如：外卖 / 奶茶 / 书籍" />
+    </div>
+
+    <div id="fab-expense-tags">
+      <label class="small" for="fab-tags">标签（可多选）</label>
+      <select id="fab-tags" name="tags" multiple>
+        {% for tag in fab_tag_options %}
+        <option value="{{ tag }}">{{ tag }}</option>
+        {% endfor %}
+      </select>
+      <div class="small" style="margin-top: 4px;">按住 Ctrl(Windows) 可多选</div>
+    </div>
+
+    <div id="fab-income-source" style="display: none;">
+      <label class="small" for="fab-income-source-input">收入来源</label>
+      <input id="fab-income-source-input" type="text" name="income_source" placeholder="如：工资 / 奖金 / 兼职" />
+    </div>
+
+    <div>
+      <label class="small" for="fab-note">备注（可选）</label>
+      <input id="fab-note" type="text" name="note" placeholder="备注（可选）" />
+    </div>
+
+    <input type="hidden" id="fab-date" name="date" value="{{ fab_today }}" />
+
+    <div class="fab-actions">
+      <span class="small fab-message" id="fab-message"></span>
+      <button class="btn" type="submit" id="fab-submit">记一笔</button>
+    </div>
+  </form>
+</section>
