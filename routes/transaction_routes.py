@@ -1,0 +1,146 @@
+from datetime import date
+
+from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+
+from config import CATEGORY_OPTIONS, TAG_OPTIONS
+from services.budget_service import get_budget_execution
+from services.subscription_service import (
+    get_subscription_monthly_cost_summary,
+    get_subscription_monthly_metrics,
+    get_upcoming_subscriptions,
+)
+from services.transaction_service import (
+    create_transaction,
+    get_category_trend,
+    get_monthly_dashboard_data,
+    get_monthly_stats,
+    get_recent_transactions,
+    get_tag_trend,
+    get_today_expense,
+    get_transactions_by_month,
+    normalize_transaction_payload,
+)
+from utils.risk_utils import build_emotion_light
+
+bp = Blueprint("transaction_routes", __name__)
+
+
+@bp.route("/", endpoint="index")
+def index():
+    category_palette = ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#EF4444"]
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    dashboard = get_monthly_dashboard_data(month=month)
+    monthly_stats = get_monthly_stats(month)
+    budget_data = get_budget_execution(month)
+
+    current_month = date.today().strftime("%Y-%m")
+    today_expense = get_today_expense() if month == current_month else 0.0
+    top_categories = [
+        {
+            **item,
+            "color": category_palette[index % len(category_palette)],
+        }
+        for index, item in enumerate(monthly_stats.get("category_stats", [])[:3])
+    ]
+    emotion_light = build_emotion_light(month, monthly_stats.get("total_expense", 0), budget_data)
+    subscription_summary = get_subscription_monthly_cost_summary()
+    subscription_metrics = get_subscription_monthly_metrics(month)
+    subscription_upcoming = get_upcoming_subscriptions(days=7)[:3]
+
+    return render_template(
+        "index.html",
+        active_page="index",
+        month=dashboard["month"],
+        summary=dashboard["summary"],
+        daily_expense=dashboard["daily_expense"],
+        category_share=dashboard["category_share"],
+        today_expense=today_expense,
+        top_categories=top_categories,
+        emotion_light=emotion_light,
+        subscription_summary=subscription_summary,
+        subscription_metrics=subscription_metrics,
+        subscription_upcoming=subscription_upcoming,
+    )
+
+
+@bp.route("/add", methods=["GET", "POST"], endpoint="add_transaction_page")
+def add_transaction_page():
+    if request.method == "POST":
+        raw_form_data = {
+            "amount": request.form.get("amount", type=float),
+            "type": request.form.get("type", "expense"),
+            "date": request.form.get("date") or date.today().isoformat(),
+            "category_main": request.form.get("category_main", ""),
+            "category_sub": request.form.get("category_sub", "").strip(),
+            "income_source": request.form.get("income_source", "").strip(),
+            "note": request.form.get("note", "").strip(),
+        }
+        form_data, _error = normalize_transaction_payload(raw_form_data, request.form.getlist("tags"))
+
+        if form_data:
+            create_transaction(form_data)
+            return redirect(url_for("transaction_routes.add_transaction_page", success="1"))
+
+        return redirect(url_for("transaction_routes.add_transaction_page", success="0"))
+
+    success = request.args.get("success")
+    recent_records = get_recent_transactions(limit=10)
+    month = date.today().strftime("%Y-%m")
+    return render_template(
+        "add.html",
+        active_page="add",
+        month=month,
+        today=date.today().isoformat(),
+        success=success,
+        category_options=CATEGORY_OPTIONS,
+        tag_options=TAG_OPTIONS,
+        recent_records=recent_records,
+    )
+
+
+@bp.route("/api/transactions", methods=["POST"], endpoint="create_transaction_api")
+def create_transaction_api():
+    payload = request.get_json(silent=True) or {}
+    if payload.get("amount") in (None, "") or payload.get("date") in (None, ""):
+        return jsonify({"error": "amount and date are required"}), 400
+
+    tags = payload.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+
+    transaction_data, error = normalize_transaction_payload(payload, tags)
+    if not transaction_data:
+        return jsonify({"error": error or "invalid payload"}), 400
+
+    created_id = create_transaction(transaction_data)
+    return jsonify({"id": created_id}), 201
+
+
+@bp.route("/api/transactions", methods=["GET"], endpoint="list_transactions_api")
+def list_transactions_api():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    return jsonify(get_transactions_by_month(month))
+
+
+@bp.route("/api/stats/monthly", methods=["GET"], endpoint="monthly_stats_api")
+def monthly_stats_api():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    return jsonify(get_monthly_stats(month))
+
+
+@bp.route("/api/stats/category", methods=["GET"], endpoint="category_trend_api")
+def category_trend_api():
+    category_name = request.args.get("name")
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    if not category_name:
+        return jsonify({"error": "name is required"}), 400
+    return jsonify(get_category_trend(category_name, month))
+
+
+@bp.route("/api/stats/tags", methods=["GET"], endpoint="tag_trend_api")
+def tag_trend_api():
+    tag_name = request.args.get("name")
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    if not tag_name:
+        return jsonify({"error": "name is required"}), 400
+    return jsonify(get_tag_trend(tag_name, month))
