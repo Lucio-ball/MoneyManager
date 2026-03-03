@@ -23,6 +23,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
+          {% include '_global_month_selector.html' %}
           <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
@@ -31,7 +32,10 @@
     <main class="app-shell">
       <div class="page">
         <section class="panel">
+          {% set goals_month = (request.args.get('month') or fab_today[:7]) %}
           <h1 class="page-title">目标管理（Goal Tracking）</h1>
+          <div class="page-subtitle">当前月份：{{ goals_month[:4] }}年{{ goals_month[5:7] }}月</div>
+          {% include '_page_month_nav.html' %}
           <div class="section-insight">设置存钱目标并追踪进度，系统会自动计算每月应存金额与进度是否落后。</div>
         </section>
 
@@ -102,6 +106,7 @@
       </div>
     </main>
     {% include '_fab_transaction.html' %}
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>
 </html>

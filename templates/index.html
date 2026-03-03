@@ -24,10 +24,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
-          <form method="get" action="/" class="toolbar">
-            <input type="month" name="month" value="{{ month }}" />
-            <button class="btn-secondary" type="submit">切换月份</button>
-          </form>
+          {% include '_global_month_selector.html' %}
           <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
@@ -38,6 +35,7 @@
         <section class="panel">
           <h1 class="page-title">首页仪表盘</h1>
           <div class="page-subtitle">当前月份：{{ month }}</div>
+          {% include '_page_month_nav.html' %}
           <div class="section-insight">聚焦现金流、预算风险与订阅压力，快速掌握当月财务健康度。</div>
         </section>
 
@@ -262,6 +260,7 @@
       {{ {'daily_expense': daily_expense, 'category_share': category_share, 'month': month, 'home_risk_cards': home_risk_cards} | tojson }}
     </script>
 
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
 
     <script>

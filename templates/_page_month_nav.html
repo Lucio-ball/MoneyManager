@@ -1,0 +1,6 @@
+{% set inline_month_value = (month if month is defined and month else request.args.get('month')) or fab_today[:7] %}
+<div class="month-inline-nav" data-page-month-nav data-month="{{ inline_month_value }}" data-base-path="{{ request.path }}">
+  <button class="month-inline-arrow" type="button" data-action="prev" aria-label="上一月">←</button>
+  <button class="month-inline-label" type="button" data-role="label" aria-label="当前月份"></button>
+  <button class="month-inline-arrow" type="button" data-action="next" aria-label="下一月">→</button>
+</div>

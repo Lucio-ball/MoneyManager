@@ -23,10 +23,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
-          <form method="get" action="/calendar" class="toolbar">
-            <input type="month" name="month" value="{{ month }}" />
-            <button class="btn-secondary" type="submit">切换月份</button>
-          </form>
+          {% include '_global_month_selector.html' %}
           <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
@@ -37,6 +34,7 @@
         <section class="panel">
           <h1 class="page-title">消费日历视图</h1>
           <div class="page-subtitle">当前月份：{{ month }}</div>
+          <div class="month-timeline" data-month-timeline data-month="{{ month }}" data-base-path="/calendar"></div>
           <div class="section-insight">每天展示当日总支出，点击日期可查看当日消费明细；颜色越深代表支出越高。</div>
         </section>
 
@@ -85,6 +83,7 @@
     {% include '_fab_transaction.html' %}
 
     <script id="calendar-page-data" type="application/json">{{ {'month': month} | tojson }}</script>
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>

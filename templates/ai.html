@@ -23,10 +23,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
-          <form method="get" action="/ai" class="toolbar">
-            <input type="month" name="month" value="{{ month }}" />
-            <button class="btn-secondary" type="submit">切换月份</button>
-          </form>
+          {% include '_global_month_selector.html' %}
           <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
@@ -40,6 +37,7 @@
       <section class="panel">
         <h1 class="page-title">AI 月度复盘</h1>
         <div class="page-subtitle">当前月份：{{ month }}</div>
+        {% include '_page_month_nav.html' %}
         <div class="section-insight">基于结构化数据包快速生成复盘结论，并支持归档沉淀。</div>
         <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
           <article class="kpi-card">
@@ -139,14 +137,13 @@
       </section>
 
       <section class="panel">
-        <form method="get" action="/ai" class="toolbar" style="margin-bottom: 12px;">
-          <input type="month" name="month" value="{{ month }}" />
-          <button class="btn-secondary" type="submit">刷新数据</button>
+        <div class="toolbar" style="margin-bottom: 12px;">
+          <a class="btn-secondary" href="/ai?month={{ month }}">刷新数据</a>
           <a class="btn-secondary" href="/api/ai/monthly/export?month={{ month }}">导出数据包 JSON</a>
           <button class="btn" type="button" id="copy-json-btn">复制 AI 输入数据包</button>
           <button class="btn-secondary" type="button" id="copy-prompt-btn">复制提示词模板</button>
           <button class="btn-secondary" type="button" id="copy-full-prompt-btn">复制完整提示词（模板+数据）</button>
-        </form>
+        </div>
 
         <div class="grid-2">
           <div>
@@ -226,6 +223,7 @@
       });
     </script>
     {% include '_fab_transaction.html' %}
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>
 </html>

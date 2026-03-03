@@ -24,10 +24,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
-          <form method="get" action="/analysis" class="toolbar">
-            <input type="month" name="month" value="{{ month }}" />
-            <button class="btn-secondary" type="submit">切换月份</button>
-          </form>
+          {% include '_global_month_selector.html' %}
           <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
@@ -47,6 +44,7 @@
         <section class="panel">
           <h1 class="page-title">专业财务分析仪表盘</h1>
           <div class="page-subtitle">分析月份：{{ month }}</div>
+          {% include '_page_month_nav.html' %}
           <div class="section-insight">从结构、节奏、趋势与风险四个维度给出可执行洞察，支持持续优化消费行为。</div>
         </section>
 
@@ -357,6 +355,7 @@
 
     {% include '_fab_transaction.html' %}
     <script id="analysis-dashboard-data" type="application/json">{{ analysis_data | tojson }}</script>
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
     <script src="{{ url_for('static', filename='js/analysis.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>

@@ -1,0 +1,19 @@
+{% set global_month_value = (month if month is defined and month else request.args.get('month')) or fab_today[:7] %}
+<div class="month-selector" data-month-selector data-month="{{ global_month_value }}" data-base-path="{{ request.path }}">
+  <button class="month-selector-trigger" type="button" data-role="trigger" aria-haspopup="true" aria-expanded="false">
+    <span data-role="label"></span>
+    <span class="month-selector-caret">▾</span>
+  </button>
+  <div class="month-selector-menu" data-role="menu" hidden>
+    <div class="month-selector-quick">
+      <button class="btn-secondary" type="button" data-action="prev">上一月</button>
+      <button class="btn-secondary" type="button" data-action="next">下一月</button>
+    </div>
+    <div class="month-selector-year-row">
+      <button class="month-selector-icon" type="button" data-action="year-prev" aria-label="上一年">←</button>
+      <span class="month-selector-year" data-role="year"></span>
+      <button class="month-selector-icon" type="button" data-action="year-next" aria-label="下一年">→</button>
+    </div>
+    <div class="month-selector-grid" data-role="month-grid"></div>
+  </div>
+</div>

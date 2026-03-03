@@ -274,6 +274,143 @@ textarea:focus {
   align-items: center;
 }
 
+.month-selector {
+  position: relative;
+}
+
+.month-selector-trigger {
+  min-width: 142px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.month-selector-caret {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.month-selector-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 272px;
+  padding: 10px;
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  z-index: 90;
+  display: grid;
+  gap: 10px;
+}
+
+.month-selector-menu[hidden] {
+  display: none;
+}
+
+.month-selector-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.month-selector-year-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.month-selector-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: #F8FAFC;
+  color: var(--text);
+}
+
+.month-selector-year {
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.month-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.month-grid-item {
+  padding: 7px 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #FFFFFF;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.month-grid-item.active,
+.month-chip.active,
+.month-timeline-item.active {
+  border-color: #BFDBFE;
+  background: #DBEAFE;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.month-inline-nav {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-inline-arrow,
+.month-inline-label {
+  height: 34px;
+  border: 1px solid var(--border);
+  background: #FFFFFF;
+  color: var(--text-strong);
+  border-radius: 9px;
+}
+
+.month-inline-arrow {
+  width: 34px;
+  padding: 0;
+}
+
+.month-inline-label {
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+.month-timeline {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.month-timeline-item {
+  border: 1px solid var(--border);
+  background: #FFFFFF;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
 .form-grid {
   display: grid;
   gap: 12px;
@@ -769,6 +906,12 @@ textarea.code {
   .nav-links,
   .nav-actions {
     justify-content: flex-start;
+  }
+
+  .month-selector-menu {
+    left: 0;
+    right: auto;
+    width: min(272px, calc(100vw - 56px));
   }
 
   .page-title {

@@ -23,10 +23,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
-          <form method="get" action="/budget" class="toolbar">
-            <input type="month" name="month" value="{{ month }}" />
-            <button class="btn-secondary" type="submit">切换月份</button>
-          </form>
+          {% include '_global_month_selector.html' %}
           <button class="btn js-fab-open" type="button">记账</button>
         </div>
       </div>
@@ -37,6 +34,7 @@
       <section class="panel">
         <h1 class="page-title">预算模块</h1>
         <div class="page-subtitle">当前月份：{{ month }}</div>
+        {% include '_page_month_nav.html' %}
         <div class="section-insight">通过预算配置与风险识别联动，持续提升本月资金使用效率。</div>
       </section>
 
@@ -48,7 +46,7 @@
         {% endif %}
 
         <form method="post" action="/budget" class="form-grid form-grid-4">
-          <input type="month" name="month" value="{{ month }}" required />
+          <input type="hidden" name="month" value="{{ month }}" />
           <select name="category_main">
             <option value="">总预算（不选类别）</option>
             {% for category in category_options %}
@@ -201,6 +199,7 @@
       </div>
     </main>
     {% include '_fab_transaction.html' %}
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
   </body>
 </html>

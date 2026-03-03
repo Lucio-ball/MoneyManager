@@ -24,6 +24,7 @@
           <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
         </nav>
         <div class="nav-actions">
+          {% include '_global_month_selector.html' %}
           <a class="btn-secondary" href="/">回到仪表盘</a>
           <a class="btn" href="/subscriptions/add">新增订阅</a>
         </div>
@@ -152,6 +153,7 @@
       {{ {'summary': summary, 'subscriptions': subscriptions} | tojson }}
     </script>
     {% include '_fab_transaction.html' %}
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
     <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
