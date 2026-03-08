@@ -15,6 +15,7 @@ from services.transaction_service import (
     get_calendar_daily_expense,
     get_calendar_day_details,
     create_transaction,
+    get_monthly_financial_summary,
     get_category_trend,
     get_monthly_dashboard_data,
     get_monthly_stats,
@@ -35,6 +36,7 @@ def index():
     month = request.args.get("month") or date.today().strftime("%Y-%m")
     dashboard = get_monthly_dashboard_data(month=month)
     monthly_stats = get_monthly_stats(month)
+    financial_summary = get_monthly_financial_summary(month)
     budget_data = get_budget_execution(month)
     budget_health = get_budget_health_profile(month)
 
@@ -47,7 +49,7 @@ def index():
         }
         for index, item in enumerate(monthly_stats.get("category_stats", [])[:3])
     ]
-    emotion_light = build_emotion_light(month, monthly_stats.get("total_expense", 0), budget_data)
+    emotion_light = build_emotion_light(month, financial_summary.get("net_expense", 0), budget_data)
     subscription_summary = get_subscription_monthly_cost_summary()
     subscription_metrics = get_subscription_monthly_metrics(month)
     subscription_upcoming = get_upcoming_subscriptions(days=7)[:3]
@@ -56,7 +58,7 @@ def index():
     goal_summary = get_goal_dashboard_summary()
     home_risk_cards = get_home_risk_cards(
         month=month,
-        total_expense=float(dashboard["summary"].get("total_expense", 0) or 0),
+        total_expense=float(dashboard["summary"].get("net_expense", 0) or 0),
     )
 
     return render_template(
@@ -130,7 +132,7 @@ def monthly_stats_api():
 def dashboard_risk_cards_api():
     month = request.args.get("month") or date.today().strftime("%Y-%m")
     dashboard = get_monthly_dashboard_data(month=month)
-    total_expense = float(dashboard.get("summary", {}).get("total_expense", 0) or 0)
+    total_expense = float(dashboard.get("summary", {}).get("net_expense", 0) or 0)
     return jsonify(get_home_risk_cards(month=month, total_expense=total_expense))
 
 

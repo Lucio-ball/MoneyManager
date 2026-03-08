@@ -58,12 +58,12 @@
           <div class="kpi-grid" style="margin-top: 12px;">
             <article class="kpi-card">
               <div class="kpi-label">总支出</div>
-              <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.total_expense) }}</div>
+              <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.gross_expense) }}</div>
             </article>
             <article class="kpi-card">
               <div class="kpi-label">真实收入</div>
-              <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.total_income) }}</div>
-              <div class="small">现金流总收入（含报销）：¥{{ '%.2f'|format(kpi.cashflow_income or kpi.total_income) }}</div>
+              <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.real_income) }}</div>
+              <div class="small">现金流总收入（含报销）：¥{{ '%.2f'|format(kpi.cashflow_income or kpi.gross_income) }}</div>
             </article>
             <article class="kpi-card">
               <div class="kpi-label">结余</div>
@@ -75,7 +75,7 @@
             </article>
             <article class="kpi-card">
               <div class="kpi-label">净支出</div>
-              <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.net_expense or kpi.total_expense) }}</div>
+              <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.net_expense or kpi.gross_expense) }}</div>
               <div class="small">净支出 = 总支出 - 报销金额</div>
             </article>
             <article class="kpi-card">

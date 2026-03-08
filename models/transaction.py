@@ -6,11 +6,14 @@ from utils.date_utils import month_sequence
 from utils.trend_utils import parse_tags
 
 
+REIMBURSEMENT_CATEGORY = "\u62a5\u9500"
+
+
 def _is_reimbursement_income_record(record: dict) -> bool:
     if record.get("type") != "income":
         return False
     source = str(record.get("category_sub") or "").strip()
-    return source == "报销"
+    return source == REIMBURSEMENT_CATEGORY
 
 
 def create_transaction(transaction: dict) -> int:
@@ -76,23 +79,47 @@ def get_recent_transactions(limit: int = 10) -> list[dict]:
     return result
 
 
+def get_monthly_financial_summary(month: str) -> dict:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS gross_income,
+                COALESCE(SUM(CASE WHEN type = 'income' AND TRIM(COALESCE(category_sub, '')) = ? THEN amount ELSE 0 END), 0) AS reimbursement_income,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS gross_expense
+            FROM transactions
+            WHERE substr(date, 1, 7) = ?
+            """,
+            (REIMBURSEMENT_CATEGORY, month),
+        ).fetchone()
+
+    gross_income = float(row["gross_income"] or 0)
+    reimbursement_income = float(row["reimbursement_income"] or 0)
+    gross_expense = float(row["gross_expense"] or 0)
+    real_income = gross_income - reimbursement_income
+    net_expense = gross_expense - reimbursement_income
+    balance = real_income - net_expense
+
+    return {
+        "month": month,
+        "gross_income": round(gross_income, 2),
+        "reimbursement_income": round(reimbursement_income, 2),
+        "real_income": round(real_income, 2),
+        "gross_expense": round(gross_expense, 2),
+        "net_expense": round(net_expense, 2),
+        "balance": round(balance, 2),
+        "total_income": round(gross_income, 2),
+        "total_expense": round(gross_expense, 2),
+    }
+
+
 def get_monthly_dashboard_data(month: str | None = None) -> dict:
     if not month:
         month = date.today().strftime("%Y-%m")
 
-    with get_connection() as conn:
-        totals_row = conn.execute(
-            """
-            SELECT
-                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS total_expense,
-                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS total_income,
-                COALESCE(SUM(CASE WHEN type = 'income' AND TRIM(COALESCE(category_sub, '')) = '报销' THEN amount ELSE 0 END), 0) AS reimbursement_income
-            FROM transactions
-            WHERE substr(date, 1, 7) = ?
-            """,
-            (month,),
-        ).fetchone()
+    financial_summary = get_monthly_financial_summary(month)
 
+    with get_connection() as conn:
         daily_rows = conn.execute(
             """
             SELECT date, ROUND(SUM(amount), 2) AS expense_amount
@@ -115,23 +142,9 @@ def get_monthly_dashboard_data(month: str | None = None) -> dict:
             (month,),
         ).fetchall()
 
-    total_expense = float(totals_row["total_expense"] or 0)
-    total_income = float(totals_row["total_income"] or 0)
-    reimbursement_income = float(totals_row["reimbursement_income"] or 0)
-    real_income = total_income - reimbursement_income
-    net_expense = total_expense - reimbursement_income
-    balance = total_income - total_expense
-
     return {
         "month": month,
-        "summary": {
-            "total_expense": round(total_expense, 2),
-            "total_income": round(total_income, 2),
-            "real_income": round(real_income, 2),
-            "reimbursement_income": round(reimbursement_income, 2),
-            "net_expense": round(net_expense, 2),
-            "balance": round(balance, 2),
-        },
+        "summary": financial_summary,
         "daily_expense": [
             {"date": row["date"], "amount": float(row["expense_amount"] or 0)} for row in daily_rows
         ],
@@ -174,17 +187,9 @@ def get_transactions_by_month(month: str) -> list[dict]:
 
 def get_monthly_stats(month: str) -> dict:
     records = get_transactions_by_month(month)
+    financial_summary = get_monthly_financial_summary(month)
 
-    total_expense = sum(record["amount"] for record in records if record["type"] == "expense")
-    total_income = sum(record["amount"] for record in records if record["type"] == "income")
-    reimbursement_income = sum(
-        float(record.get("amount") or 0)
-        for record in records
-        if _is_reimbursement_income_record(record)
-    )
-    real_income = total_income - reimbursement_income
-    net_expense = total_expense - reimbursement_income
-    balance = total_income - total_expense
+    gross_expense = float(financial_summary["gross_expense"])
 
     daily_map: dict[str, float] = {}
     category_map: dict[str, float] = {}
@@ -206,7 +211,7 @@ def get_monthly_stats(month: str) -> dict:
 
     category_stats = []
     for category, amount in sorted(category_map.items(), key=lambda x: x[1], reverse=True):
-        ratio = (amount / total_expense * 100) if total_expense > 0 else 0
+        ratio = (amount / gross_expense * 100) if gross_expense > 0 else 0
         category_stats.append(
             {
                 "name": category,
@@ -217,7 +222,7 @@ def get_monthly_stats(month: str) -> dict:
 
     tag_stats = []
     for tag, amount in sorted(tag_map.items(), key=lambda x: x[1], reverse=True):
-        ratio = (amount / total_expense * 100) if total_expense > 0 else 0
+        ratio = (amount / gross_expense * 100) if gross_expense > 0 else 0
         tag_stats.append(
             {
                 "name": tag,
@@ -232,12 +237,7 @@ def get_monthly_stats(month: str) -> dict:
 
     return {
         "month": month,
-        "total_expense": round(total_expense, 2),
-        "total_income": round(total_income, 2),
-        "real_income": round(real_income, 2),
-        "reimbursement_income": round(reimbursement_income, 2),
-        "net_expense": round(net_expense, 2),
-        "balance": round(balance, 2),
+        **financial_summary,
         "category_stats": category_stats,
         "tag_stats": tag_stats,
         "daily_expense": daily_expense,
@@ -251,10 +251,10 @@ def get_month_reimbursement_income(month: str) -> float:
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM transactions
             WHERE type = 'income'
-              AND TRIM(COALESCE(category_sub, '')) = '报销'
+              AND TRIM(COALESCE(category_sub, '')) = ?
               AND substr(date, 1, 7) = ?
             """,
-            (month,),
+            (REIMBURSEMENT_CATEGORY, month),
         ).fetchone()
 
     return round(float(row["total"] or 0), 2)
@@ -271,11 +271,11 @@ def get_reimbursement_income_by_months(months: list[str]) -> dict[str, float]:
             SELECT substr(date, 1, 7) AS month, ROUND(SUM(amount), 2) AS total
             FROM transactions
             WHERE type = 'income'
-              AND TRIM(COALESCE(category_sub, '')) = '报销'
+              AND TRIM(COALESCE(category_sub, '')) = ?
               AND substr(date, 1, 7) IN ({placeholders})
             GROUP BY substr(date, 1, 7)
             """,
-            tuple(months),
+            (REIMBURSEMENT_CATEGORY, *months),
         ).fetchall()
 
     month_amount_map = {month: 0.0 for month in months}

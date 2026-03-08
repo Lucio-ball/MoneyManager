@@ -77,8 +77,8 @@
         </article>
         <article class="kpi-card">
           <div class="kpi-label">本月净支出</div>
-          <div class="kpi-value expense mono">¥{{ '%.2f'|format(budget_data.net_expense or budget_data.total_expense) }}</div>
-          <div class="small">总支出 ¥{{ '%.2f'|format(budget_data.total_expense) }}</div>
+          <div class="kpi-value expense mono">¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }}</div>
+          <div class="small">总支出 ¥{{ '%.2f'|format(budget_data.gross_expense) }}</div>
         </article>
         <article class="kpi-card">
           <div class="kpi-label">订阅压力</div>
@@ -94,7 +94,7 @@
 
       <section class="panel">
         <h2 class="section-title">预算执行情况</h2>
-        <p class="helper-text">本月净支出：¥{{ '%.2f'|format(budget_data.net_expense or budget_data.total_expense) }}（总支出 ¥{{ '%.2f'|format(budget_data.total_expense) }} - 报销 ¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}）</p>
+        <p class="helper-text">本月净支出：¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }}（总支出 ¥{{ '%.2f'|format(budget_data.gross_expense) }} - 报销 ¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}）</p>
 
         {% if budget_data['items'] %}
         <div class="table-wrap">

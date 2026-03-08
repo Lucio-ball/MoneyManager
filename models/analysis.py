@@ -4,7 +4,7 @@ from calendar import monthrange
 from extensions.database import get_connection
 from models.budget import get_budget_execution, get_budget_health_profile
 from models.subscription import get_subscription_monthly_metrics, get_subscription_monthly_recap
-from models.transaction import get_monthly_stats, get_transactions_by_month
+from models.transaction import get_monthly_financial_summary, get_monthly_stats, get_transactions_by_month
 from utils.date_utils import month_sequence
 from utils.trend_utils import parse_tags
 
@@ -346,7 +346,8 @@ def _build_risk_radar(consumption_health: dict, subscription_ratio: float) -> di
 
 def get_monthly_insights(month: str) -> dict:
     monthly_stats = get_monthly_stats(month)
-    total_expense = monthly_stats["total_expense"]
+    financial_summary = get_monthly_financial_summary(month)
+    total_expense = financial_summary["gross_expense"]
 
     daily_amounts = [item["amount"] for item in monthly_stats["daily_expense"]]
     daily_avg = (sum(daily_amounts) / len(daily_amounts)) if daily_amounts else 0
@@ -462,19 +463,20 @@ def get_monthly_insights(month: str) -> dict:
 
 def get_analysis_dashboard_data(month: str) -> dict:
     monthly_stats = get_monthly_stats(month)
+    financial_summary = get_monthly_financial_summary(month)
     insights = get_monthly_insights(month)
     subscription_metrics = get_subscription_monthly_metrics(month)
     budget_health = get_budget_health_profile(month)
     months = month_sequence(month, count=3)
 
-    total_expense = float(monthly_stats.get("total_expense", 0) or 0)
-    total_income = float(monthly_stats.get("total_income", 0) or 0)
-    real_income = float(monthly_stats.get("real_income", total_income) or 0)
-    reimbursement_amount = float(monthly_stats.get("reimbursement_income", 0) or 0)
-    net_expense = float(monthly_stats.get("net_expense", total_expense) or 0)
-    balance = float(monthly_stats.get("balance", 0) or 0)
+    gross_expense = float(financial_summary.get("gross_expense", 0) or 0)
+    gross_income = float(financial_summary.get("gross_income", 0) or 0)
+    real_income = float(financial_summary.get("real_income", gross_income) or 0)
+    reimbursement_amount = float(financial_summary.get("reimbursement_income", 0) or 0)
+    net_expense = float(financial_summary.get("net_expense", gross_expense) or 0)
+    balance = float(financial_summary.get("balance", 0) or 0)
     subscription_cost = float(subscription_metrics.get("estimated_monthly_cost", 0) or 0)
-    subscription_ratio = (subscription_cost / total_expense * 100) if total_expense > 0 else 0.0
+    subscription_ratio = (subscription_cost / net_expense * 100) if net_expense > 0 else 0.0
     impulsive_ratio = float(insights.get("impulsive_spending_ratio", {}).get("ratio", 0) or 0)
     learning_ratio = float(insights.get("learning_investment_ratio", {}).get("ratio", 0) or 0)
     consumption_health = insights.get("consumption_health", {})
@@ -498,7 +500,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
         item for item in get_transactions_by_month(month) if item.get("type") == "expense"
     ]
     frequency_count = len(expense_records)
-    avg_amount = (total_expense / frequency_count) if frequency_count > 0 else 0.0
+    avg_amount = (gross_expense / frequency_count) if frequency_count > 0 else 0.0
 
     category_count_map: dict[str, int] = {}
     category_amount_map: dict[str, float] = {}
@@ -526,7 +528,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
     this_month_tag_stats = []
     for tag in tag_focus:
         amount = round(tag_amount_map.get(tag, 0), 2)
-        ratio = (amount / total_expense * 100) if total_expense > 0 else 0
+        ratio = (amount / gross_expense * 100) if gross_expense > 0 else 0
         this_month_tag_stats.append({"name": tag, "amount": amount, "ratio": round(ratio, 2)})
 
     with get_connection() as conn:
@@ -657,9 +659,11 @@ def get_analysis_dashboard_data(month: str) -> dict:
     return {
         "month": month,
         "kpi": {
-            "total_expense": round(total_expense, 2),
+            "gross_expense": round(gross_expense, 2),
+            "gross_income": round(gross_income, 2),
+            "total_expense": round(gross_expense, 2),
             "total_income": round(real_income, 2),
-            "cashflow_income": round(total_income, 2),
+            "cashflow_income": round(gross_income, 2),
             "real_income": round(real_income, 2),
             "reimbursement_amount": round(reimbursement_amount, 2),
             "net_expense": round(net_expense, 2),
@@ -712,6 +716,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
         "budget": budget_health,
         "raw": {
             "monthly_stats": monthly_stats,
+            "financial_summary": financial_summary,
             "insights": insights,
             "subscription_metrics": subscription_metrics,
         },

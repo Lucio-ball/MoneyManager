@@ -33,7 +33,7 @@ def build_ai_monthly_response(month: str) -> dict:
     response["risk_radar_level"] = risk_radar.get("level", "低风险")
     response["reimbursement_income"] = monthly_stats.get("reimbursement_income", 0)
     response["net_expense"] = monthly_stats.get("net_expense", 0)
-    response["real_income"] = monthly_stats.get("real_income", monthly_stats.get("total_income", 0))
+    response["real_income"] = monthly_stats.get("real_income", monthly_stats.get("gross_income", monthly_stats.get("total_income", 0)))
     response["prompt_template"] = build_ai_prompt_template(month)
     response["prompt_with_package"] = (
         build_ai_prompt_template(month)
