@@ -1,5 +1,6 @@
 import math
 from calendar import monthrange
+from datetime import datetime
 
 from extensions.database import get_connection
 from models.budget import get_budget_execution, get_budget_health_profile
@@ -295,6 +296,286 @@ def _risk_level(score: float) -> str:
     return "低风险"
 
 
+def _safe_median(values: list[float]) -> float:
+    ordered = sorted(float(value or 0) for value in values)
+    if not ordered:
+        return 0.0
+    middle = len(ordered) // 2
+    if len(ordered) % 2 == 1:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _safe_mean(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return sum(float(value or 0) for value in values) / len(values)
+
+
+def _parse_hour(value: str | None) -> int | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace(" ", "T")
+    try:
+        return datetime.fromisoformat(normalized).hour
+    except ValueError:
+        return None
+
+
+def _is_non_rigid_expense(record: dict) -> bool:
+    tags = set(record.get("tags", []) or [])
+    if "鍒氶渶" in tags:
+        return False
+    category_name = str(record.get("category_main") or "")
+    rigid_keywords = ("鎴胯", "鎴夸綇", "閫氬嫟", "鍖荤枟", "瀛︿範", "鏁欒偛")
+    return not any(keyword in category_name for keyword in rigid_keywords)
+
+
+def detect_spending_anomalies(month: str) -> dict:
+    records = [item for item in get_transactions_by_month(month) if item.get("type") == "expense"]
+    monthly_stats = get_monthly_stats(month)
+    daily_expense = monthly_stats.get("daily_expense", [])
+    month_amounts = [float(item.get("amount") or 0) for item in records]
+    month_mean = _safe_mean(month_amounts)
+    month_median = _safe_median(month_amounts)
+
+    months = month_sequence(month, count=4)
+    history_months = [item for item in months if item != month]
+    history_category_map: dict[str, list[float]] = {}
+    history_category_count_map: dict[str, list[int]] = {}
+    history_total_by_day: list[float] = []
+
+    if history_months:
+        placeholders = ",".join("?" for _ in history_months)
+        with get_connection() as conn:
+            category_rows = conn.execute(
+                f"""
+                SELECT substr(date, 1, 7) AS month, category_main, ROUND(SUM(amount), 2) AS amount, COUNT(*) AS count
+                FROM transactions
+                WHERE type = 'expense'
+                  AND substr(date, 1, 7) IN ({placeholders})
+                GROUP BY substr(date, 1, 7), category_main
+                """,
+                tuple(history_months),
+            ).fetchall()
+            day_rows = conn.execute(
+                f"""
+                SELECT date, ROUND(SUM(amount), 2) AS amount
+                FROM transactions
+                WHERE type = 'expense'
+                  AND substr(date, 1, 7) IN ({placeholders})
+                GROUP BY date
+                """,
+                tuple(history_months),
+            ).fetchall()
+
+        for row in category_rows:
+            category = row["category_main"] or "鍏朵粬"
+            history_category_map.setdefault(category, []).append(float(row["amount"] or 0))
+            history_category_count_map.setdefault(category, []).append(int(row["count"] or 0))
+        history_total_by_day = [float(row["amount"] or 0) for row in day_rows]
+
+    category_amounts_current: dict[str, list[float]] = {}
+    category_totals_current: dict[str, float] = {}
+    day_records_map: dict[str, list[dict]] = {}
+    micro_records: list[dict] = []
+    late_night_records: list[dict] = []
+    emotional_records: list[dict] = []
+    impulsive_records: list[dict] = []
+
+    small_threshold = 0.0
+    if month_amounts:
+        small_threshold = max(10.0, min(max(month_median * 0.6, 0.0), 30.0))
+
+    for record in records:
+        category = record.get("category_main") or "鍏朵粬"
+        amount = float(record.get("amount") or 0)
+        category_amounts_current.setdefault(category, []).append(amount)
+        category_totals_current[category] = round(category_totals_current.get(category, 0.0) + amount, 2)
+        day_records_map.setdefault(str(record.get("date")), []).append(record)
+
+        tags = set(record.get("tags", []) or [])
+        note_text = str(record.get("note") or "")
+        if "鍐插姩" in tags:
+            impulsive_records.append(record)
+        if "鎯呯华娑堣垂" in tags or "鎯呯华" in note_text:
+            emotional_records.append(record)
+        hour = _parse_hour(record.get("created_at"))
+        if hour is not None and (hour >= 22 or hour < 6) and _is_non_rigid_expense(record):
+            late_night_records.append(record)
+        if amount > 0 and small_threshold > 0 and amount <= small_threshold:
+            micro_records.append(record)
+
+    high_value_anomalies = []
+    for record in sorted(records, key=lambda item: float(item.get("amount") or 0), reverse=True):
+        category = record.get("category_main") or "鍏朵粬"
+        amount = float(record.get("amount") or 0)
+        category_values = category_amounts_current.get(category, [])
+        category_mean = _safe_mean(category_values)
+        history_avg = _safe_mean(history_category_map.get(category, []))
+        if amount <= 0:
+            continue
+
+        is_high_vs_category = category_mean > 0 and amount >= category_mean * 2.5 and amount >= max(month_mean * 1.8, 50.0)
+        is_high_vs_month = month_median > 0 and amount >= month_median * 3 and amount >= max(month_mean * 2.0, 80.0)
+        is_high_vs_history = history_avg > 0 and amount >= history_avg * 2.2
+
+        if is_high_vs_category or is_high_vs_month or is_high_vs_history:
+            high_value_anomalies.append(
+                {
+                    "id": int(record.get("id") or 0),
+                    "date": record.get("date"),
+                    "category": category,
+                    "amount": round(amount, 2),
+                    "category_mean": round(category_mean, 2),
+                    "month_median": round(month_median, 2),
+                    "history_avg": round(history_avg, 2),
+                    "note": record.get("note") or "",
+                }
+            )
+    high_value_anomalies = high_value_anomalies[:5]
+
+    daily_values = [float(item.get("amount") or 0) for item in daily_expense]
+    day_mean = _safe_mean(daily_values)
+    history_day_mean = _safe_mean(history_total_by_day)
+    day_variance = sum((value - day_mean) ** 2 for value in daily_values) / len(daily_values) if daily_values else 0.0
+    day_std = math.sqrt(day_variance)
+    daily_threshold = max(day_mean + day_std, day_mean * 2.0, history_day_mean * 1.8 if history_day_mean > 0 else 0.0)
+    daily_spikes = []
+    for item in sorted(daily_expense, key=lambda row: float(row.get("amount") or 0), reverse=True):
+        amount = float(item.get("amount") or 0)
+        if amount <= 0 or amount < daily_threshold:
+            continue
+        day_records = day_records_map.get(str(item.get("date")), [])
+        non_rigid_count = sum(1 for row in day_records if _is_non_rigid_expense(row))
+        daily_spikes.append(
+            {
+                "date": item.get("date"),
+                "amount": round(amount, 2),
+                "tx_count": len(day_records),
+                "non_rigid_count": non_rigid_count,
+            }
+        )
+    daily_spikes = daily_spikes[:5]
+
+    category_spikes = []
+    for category, amount in sorted(category_totals_current.items(), key=lambda row: row[1], reverse=True):
+        history_values = history_category_map.get(category, [])
+        history_avg = _safe_mean(history_values)
+        current_count = len(category_amounts_current.get(category, []))
+        history_count_avg = _safe_mean(history_category_count_map.get(category, []))
+        if amount <= 0 or history_avg <= 0:
+            continue
+        growth_ratio = (amount - history_avg) / history_avg * 100
+        count_growth_ratio = (
+            (current_count - history_count_avg) / history_count_avg * 100 if history_count_avg > 0 else 0.0
+        )
+        if growth_ratio >= 45 and amount - history_avg >= max(month_mean, 50.0):
+            category_spikes.append(
+                {
+                    "category": category,
+                    "amount": round(amount, 2),
+                    "history_avg": round(history_avg, 2),
+                    "growth_ratio": round(growth_ratio, 2),
+                    "count_growth_ratio": round(count_growth_ratio, 2),
+                }
+            )
+    category_spikes = category_spikes[:5]
+
+    same_day_impulse = []
+    for date_key, day_records in day_records_map.items():
+        non_rigid_records = [row for row in day_records if _is_non_rigid_expense(row)]
+        non_rigid_total = sum(float(row.get("amount") or 0) for row in non_rigid_records)
+        if len(non_rigid_records) >= 4 and non_rigid_total >= max(month_mean, 80.0):
+            same_day_impulse.append(
+                {
+                    "date": date_key,
+                    "count": len(non_rigid_records),
+                    "amount": round(non_rigid_total, 2),
+                }
+            )
+
+    impulse_signals = {
+        "late_night_count": len(late_night_records),
+        "late_night_amount": round(sum(float(item.get("amount") or 0) for item in late_night_records), 2),
+        "emotional_count": len(emotional_records),
+        "emotional_amount": round(sum(float(item.get("amount") or 0) for item in emotional_records), 2),
+        "impulsive_tag_count": len(impulsive_records),
+        "impulsive_tag_amount": round(sum(float(item.get("amount") or 0) for item in impulsive_records), 2),
+        "same_day_cluster": sorted(same_day_impulse, key=lambda item: item["amount"], reverse=True)[:3],
+    }
+
+    micro_total = sum(float(item.get("amount") or 0) for item in micro_records)
+    micro_count = len(micro_records)
+    micro_spending_pattern = {
+        "threshold": round(small_threshold, 2),
+        "count": micro_count,
+        "amount": round(micro_total, 2),
+        "avg_amount": round(micro_total / micro_count, 2) if micro_count > 0 else 0.0,
+        "is_significant": micro_count >= 6 and micro_total >= max(month_mean * 1.5, 100.0),
+    }
+
+    score = 0.0
+    score += min(len(high_value_anomalies) * 18, 30)
+    score += min(len(daily_spikes) * 12, 20)
+    score += min(len(category_spikes) * 14, 20)
+    score += min(
+        (impulse_signals["late_night_count"] + impulse_signals["emotional_count"] + impulse_signals["impulsive_tag_count"]) * 3,
+        18,
+    )
+    if micro_spending_pattern["is_significant"]:
+        score += 12
+
+    insights = []
+    if high_value_anomalies:
+        top_item = high_value_anomalies[0]
+        insights.append(
+            f"{top_item['date']} 在 {top_item['category']} 出现单笔 {top_item['amount']:.2f} 元高消费，明显高于本月常规水平。"
+        )
+    if daily_spikes:
+        top_day = daily_spikes[0]
+        insights.append(
+            f"{top_day['date']} 单日支出 {top_day['amount']:.2f} 元，且有 {top_day['tx_count']} 笔交易，消费集中度偏高。"
+        )
+    if category_spikes:
+        top_category = category_spikes[0]
+        insights.append(
+            f"{top_category['category']} 较近 3 个月月均增长 {top_category['growth_ratio']:.2f}%，属于本月异常增长类别。"
+        )
+    if impulse_signals["late_night_count"] > 0 or impulse_signals["emotional_count"] > 0:
+        insights.append(
+            f"本月出现 {impulse_signals['late_night_count']} 笔深夜记录、{impulse_signals['emotional_count']} 笔情绪化标签记录，需关注冲动决策。"
+        )
+    if micro_spending_pattern["is_significant"]:
+        insights.append(
+            f"小额消费共 {micro_spending_pattern['count']} 笔，累计 {micro_spending_pattern['amount']:.2f} 元，存在高频小额堆积。"
+        )
+    if impulse_signals["same_day_cluster"]:
+        cluster = impulse_signals["same_day_cluster"][0]
+        insights.append(
+            f"{cluster['date']} 出现 {cluster['count']} 笔非刚需消费，累计 {cluster['amount']:.2f} 元，存在集中冲动消费信号。"
+        )
+
+    return {
+        "month": month,
+        "high_value_anomalies": high_value_anomalies,
+        "category_spikes": category_spikes,
+        "daily_spikes": daily_spikes,
+        "impulse_signals": impulse_signals,
+        "micro_spending_pattern": micro_spending_pattern,
+        "risk_level": _risk_level(round(score, 2)),
+        "risk_score": round(score, 2),
+        "insights": insights[:6],
+        "benchmarks": {
+            "month_mean": round(month_mean, 2),
+            "month_median": round(month_median, 2),
+            "daily_mean": round(day_mean, 2),
+            "daily_threshold": round(daily_threshold, 2),
+        },
+    }
+
+
 def _build_risk_radar(consumption_health: dict, subscription_ratio: float, budget_health: dict) -> dict:
     metrics = consumption_health.get("metrics", {})
     impulsive_ratio = float(metrics.get("impulsive_ratio", 0) or 0)
@@ -348,6 +629,7 @@ def get_monthly_insights(month: str) -> dict:
     monthly_stats = get_monthly_stats(month)
     financial_summary = get_monthly_financial_summary(month)
     total_expense = financial_summary["gross_expense"]
+    spending_anomalies = detect_spending_anomalies(month)
 
     daily_amounts = [item["amount"] for item in monthly_stats["daily_expense"]]
     daily_avg = (sum(daily_amounts) / len(daily_amounts)) if daily_amounts else 0
@@ -448,6 +730,7 @@ def get_monthly_insights(month: str) -> dict:
         "month": month,
         "abnormal_high_expense_days": abnormal_days,
         "long_term_high_ratio_categories": long_term_high_categories,
+        "spending_anomalies": spending_anomalies,
         "impulsive_spending_ratio": {
             "amount": round(impulsive_amount, 2),
             "ratio": round(impulsive_ratio, 2),
@@ -483,6 +766,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
     consumption_health = insights.get("consumption_health", {})
     consumption_persona = insights.get("consumption_persona", {})
     risk_radar = insights.get("risk_radar", {})
+    spending_anomalies = insights.get("spending_anomalies", {})
     consumption_health_score = float(consumption_health.get("score", 0) or 0)
 
     top_category = (monthly_stats.get("category_stats") or [{}])[0].get("name", "其他")
@@ -605,6 +889,17 @@ def get_analysis_dashboard_data(month: str) -> dict:
             }
         )
 
+    anomaly_insights = spending_anomalies.get("insights", [])
+    if anomaly_insights:
+        risk_items.append(
+            {
+                "key": "spending_anomalies",
+                "level": "high" if spending_anomalies.get("risk_score", 0) >= 70 else "medium",
+                "title": "寮傚父娑堣垂 / 鍐插姩娑堣垂",
+                "message": anomaly_insights[0],
+            }
+        )
+
     if impulsive_ratio >= 30:
         risk_items.append(
             {
@@ -711,6 +1006,7 @@ def get_analysis_dashboard_data(month: str) -> dict:
             "long_term_high_ratio_categories": long_term_categories,
             "learning_investment_ratio": insights.get("learning_investment_ratio", {}),
             "subscription_ratio": round(subscription_ratio, 2),
+            "spending_anomalies": spending_anomalies,
             "risk_radar": risk_radar,
             "items": risk_items,
         },

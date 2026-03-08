@@ -806,6 +806,142 @@ textarea.code {
   padding: 14px;
 }
 
+.review-hero {
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.14), transparent 32%),
+    linear-gradient(180deg, #FFFFFF 0%, #F8FBFF 100%);
+}
+
+.review-hero-top,
+.review-score-row,
+.review-split {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.review-hero-metric {
+  min-width: 200px;
+  padding: 18px;
+  border: 1px solid #DBEAFE;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.review-hero-label,
+.review-mini-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.review-hero-value,
+.review-score,
+.review-identity {
+  margin-top: 6px;
+  color: var(--text-strong);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.review-hero-value.income { color: var(--success); }
+.review-hero-value.expense { color: var(--danger); }
+
+.review-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.review-pill-row,
+.review-grid,
+.review-note-list,
+.review-bullet-list,
+.review-suggestion-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.review-pill-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.review-pill,
+.review-note,
+.review-bullet,
+.review-suggestion {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #FCFDFF;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.review-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.review-card {
+  display: grid;
+  gap: 14px;
+}
+
+.review-card-wide {
+  grid-column: span 2;
+}
+
+.review-split > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-list-title {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.review-risk-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.review-risk-item.high {
+  border-color: #FECACA;
+  background: #FEF2F2;
+}
+
+.review-risk-item.medium {
+  border-color: #FDE68A;
+  background: #FFFBEB;
+}
+
+.review-risk-title {
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.review-suggestion-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .fab-trigger {
   position: fixed;
   right: max(18px, 4vw);
@@ -1034,7 +1170,10 @@ textarea.code {
   }
 
   .risk-grid,
-  .subscription-grid {
+  .subscription-grid,
+  .review-grid,
+  .review-suggestion-grid,
+  .review-pill-row {
     grid-template-columns: 1fr;
   }
 
@@ -1070,6 +1209,16 @@ textarea.code {
   .persona-metric-grid,
   .form-grid-4 {
     grid-template-columns: 1fr;
+  }
+
+  .review-hero-top,
+  .review-score-row,
+  .review-split {
+    flex-direction: column;
+  }
+
+  .review-card-wide {
+    grid-column: auto;
   }
 
   .kpi-card {

@@ -38,6 +38,7 @@
     {% set consumption_health = analysis_data.consumption_health %}
     {% set consumption_persona = analysis_data.consumption_persona %}
     {% set risk_radar = analysis_data.risk_radar %}
+    {% set spending_anomalies = risks["spending_anomalies"] if risks and risks.get("spending_anomalies") else {} %}
 
     <main class="app-shell">
       <div class="page">
@@ -211,6 +212,121 @@
           {% else %}
           <div class="helper-text">当前月份暂无可计算的风险雷达数据。</div>
           {% endif %}
+        </section>
+
+        <section class="panel analysis-block">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title">异常消费 / 冲动消费</h2>
+              <div class="section-desc">基于近 3 个月历史、本月均值和中位数、类别分布与记录时间信号识别异常支出。</div>
+            </div>
+          </div>
+          <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
+            <article class="kpi-card">
+              <div class="kpi-label">异常风险等级</div>
+              <div class="kpi-value mono">{{ spending_anomalies["risk_level"] or '低风险' }}</div>
+              <div class="small">分数：{{ '%.2f'|format(spending_anomalies["risk_score"] or 0) }}</div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-label">检测基准</div>
+              <div class="small" style="margin-top: 4px;">本月均值：¥{{ '%.2f'|format((spending_anomalies["benchmarks"]["month_mean"] if spending_anomalies.get("benchmarks") else 0) or 0) }}</div>
+              <div class="small">本月中位数：¥{{ '%.2f'|format((spending_anomalies["benchmarks"]["month_median"] if spending_anomalies.get("benchmarks") else 0) or 0) }}</div>
+              <div class="small">单日阈值：¥{{ '%.2f'|format((spending_anomalies["benchmarks"]["daily_threshold"] if spending_anomalies.get("benchmarks") else 0) or 0) }}</div>
+            </article>
+          </div>
+          <div class="grid-2" style="margin-top: 12px;">
+            <article class="panel panel-nested">
+              <h3 class="section-title" style="font-size: 17px;">单笔 / 单日异常</h3>
+              <div class="category-list" style="margin-top: 10px;">
+                {% if spending_anomalies["high_value_anomalies"] %}
+                  {% for item in spending_anomalies["high_value_anomalies"][:3] %}
+                  <div class="category-item">
+                    <div class="category-main">
+                      <div class="category-name">{{ item["date"] }} / {{ item["category"] }}</div>
+                      <div class="small">同类均值 ¥{{ '%.2f'|format(item["category_mean"]) }}，本月中位数 ¥{{ '%.2f'|format(item["month_median"]) }}</div>
+                    </div>
+                    <div class="mono">¥{{ '%.2f'|format(item["amount"]) }}</div>
+                  </div>
+                  {% endfor %}
+                {% endif %}
+                {% if spending_anomalies["daily_spikes"] %}
+                  {% for item in spending_anomalies["daily_spikes"][:3] %}
+                  <div class="category-item">
+                    <div class="category-main">
+                      <div class="category-name">{{ item["date"] }}</div>
+                      <div class="small">{{ item["tx_count"] }} 笔交易，非刚需 {{ item["non_rigid_count"] }} 笔</div>
+                    </div>
+                    <div class="mono">¥{{ '%.2f'|format(item["amount"]) }}</div>
+                  </div>
+                  {% endfor %}
+                {% endif %}
+                {% if not spending_anomalies["high_value_anomalies"] and not spending_anomalies["daily_spikes"] %}
+                <div class="helper-text">本月暂未检测到明显的单笔或单日异常支出。</div>
+                {% endif %}
+              </div>
+            </article>
+            <article class="panel panel-nested">
+              <h3 class="section-title" style="font-size: 17px;">类别异常 / 小额堆积</h3>
+              <div class="category-list" style="margin-top: 10px;">
+                {% if spending_anomalies["category_spikes"] %}
+                  {% for item in spending_anomalies["category_spikes"][:3] %}
+                  <div class="category-item">
+                    <div class="category-main">
+                      <div class="category-name">{{ item["category"] }}</div>
+                      <div class="small">较近 3 个月均值增长 {{ '%.2f'|format(item["growth_ratio"]) }}%</div>
+                    </div>
+                    <div class="mono">¥{{ '%.2f'|format(item["amount"]) }}</div>
+                  </div>
+                  {% endfor %}
+                {% endif %}
+                <div class="category-item">
+                  <div class="category-main">
+                    <div class="category-name">小额高频消费</div>
+                    <div class="small">阈值 ¥{{ '%.2f'|format((spending_anomalies["micro_spending_pattern"]["threshold"] if spending_anomalies.get("micro_spending_pattern") else 0) or 0) }}，笔数 {{ spending_anomalies["micro_spending_pattern"]["count"] if spending_anomalies.get("micro_spending_pattern") else 0 }}</div>
+                  </div>
+                  <div class="mono">¥{{ '%.2f'|format((spending_anomalies["micro_spending_pattern"]["amount"] if spending_anomalies.get("micro_spending_pattern") else 0) or 0) }}</div>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="grid-2" style="margin-top: 12px;">
+            {% set impulse = spending_anomalies["impulse_signals"] if spending_anomalies.get("impulse_signals") else {} %}
+            <article class="panel panel-nested">
+              <h3 class="section-title" style="font-size: 17px;">冲动信号</h3>
+              <div class="analysis-metric-grid" style="margin-top: 10px;">
+                <div class="analysis-metric-item">
+                  <div class="small">深夜消费</div>
+                  <div class="kpi-value mono" style="font-size: 22px;">{{ impulse["late_night_count"] if impulse else 0 }}</div>
+                </div>
+                <div class="analysis-metric-item">
+                  <div class="small">情绪化消费</div>
+                  <div class="kpi-value mono" style="font-size: 22px;">{{ impulse["emotional_count"] if impulse else 0 }}</div>
+                </div>
+                <div class="analysis-metric-item">
+                  <div class="small">冲动标签笔数</div>
+                  <div class="kpi-value mono" style="font-size: 22px;">{{ impulse["impulsive_tag_count"] if impulse else 0 }}</div>
+                </div>
+                <div class="analysis-metric-item">
+                  <div class="small">同日集中信号</div>
+                  <div class="kpi-value mono" style="font-size: 22px;">{{ impulse["same_day_cluster"]|length if impulse and impulse["same_day_cluster"] else 0 }}</div>
+                </div>
+              </div>
+            </article>
+            <article class="panel panel-nested">
+              <h3 class="section-title" style="font-size: 17px;">提示</h3>
+              {% if spending_anomalies["insights"] %}
+              <div class="risk-grid" style="margin-top: 10px; grid-template-columns: 1fr;">
+                {% for item in spending_anomalies["insights"] %}
+                <article class="risk-card {{ 'high' if loop.index == 1 and (spending_anomalies["risk_score"] or 0) >= 70 else 'medium' }}">
+                  <div class="risk-message">{{ item }}</div>
+                </article>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="helper-text" style="margin-top: 10px;">本月暂未检测到明显的冲动消费信号。</div>
+              {% endif %}
+            </article>
+          </div>
         </section>
 
         <section class="grid-2">

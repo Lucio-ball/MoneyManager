@@ -9,14 +9,34 @@ from services.ai_service import (
     get_ai_archives,
     get_ai_monthly_package,
 )
+from services.monthly_review_service import generate_monthly_review
 from services.subscription_service import get_subscription_monthly_metrics
 from utils.date_utils import normalize_month
 
 bp = Blueprint("ai_routes", __name__)
 
 
-@bp.route("/ai", methods=["GET", "POST"], endpoint="ai_page")
+@bp.route("/ai/monthly-review", methods=["GET"], endpoint="ai_monthly_review_page")
+def ai_monthly_review_page():
+    month = normalize_month(request.args.get("month"))
+    review = generate_monthly_review(month)
+
+    return render_template(
+        "ai_monthly_review.html",
+        active_page="ai",
+        month=month,
+        review=review,
+    )
+
+
+@bp.route("/ai", methods=["GET"], endpoint="ai_page")
 def ai_page():
+    month = normalize_month(request.args.get("month"))
+    return redirect(url_for("ai_routes.ai_monthly_review_page", month=month))
+
+
+@bp.route("/ai/workbench", methods=["GET", "POST"], endpoint="ai_workbench_page")
+def ai_workbench_page():
     month = normalize_month(request.values.get("month"))
 
     if request.method == "POST":
@@ -24,8 +44,8 @@ def ai_page():
         content = request.form.get("content", "").strip()
         if content:
             create_ai_archive(archive_month, content)
-            return redirect(url_for("ai_routes.ai_page", month=archive_month, success="1"))
-        return redirect(url_for("ai_routes.ai_page", month=archive_month, success="0"))
+            return redirect(url_for("ai_routes.ai_workbench_page", month=archive_month, success="1"))
+        return redirect(url_for("ai_routes.ai_workbench_page", month=archive_month, success="0"))
 
     success = request.args.get("success")
     ai_package = get_ai_monthly_package(month)

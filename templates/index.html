@@ -207,6 +207,16 @@
                 ｜ 本月实际订阅扣费：<span class="mono">¥{{ '%.2f'|format(subscription_metrics.actual_charged_amount) }}</span>
                 ｜ 未来 7 天：{{ subscription_summary.upcoming_count }} 项
               </div>
+              <div class="analysis-metric-grid" style="margin-top: 10px;">
+                <div class="analysis-metric-item">
+                  <div class="small">30 天内续费</div>
+                  <div class="kpi-value mono" style="font-size: 22px;">{{ subscription_alerts.upcoming_30_days_count }}</div>
+                </div>
+                <div class="analysis-metric-item">
+                  <div class="small">订阅压力</div>
+                  <div class="kpi-value mono" style="font-size: 22px;">{{ '%.2f'|format(subscription_health.subscription_pressure) }}%</div>
+                </div>
+              </div>
               {% if subscription_upcoming %}
               <div class="category-list" style="margin-top: 10px;">
                 {% for item in subscription_upcoming %}
@@ -226,6 +236,23 @@
               </div>
               {% else %}
               <div class="helper-text">未来 7 天暂无订阅扣费。</div>
+              {% endif %}
+              {% if subscription_health.cancel_candidates %}
+              <div class="small" style="margin-top: 14px;">可考虑取消</div>
+              <div class="category-list" style="margin-top: 8px;">
+                {% for item in subscription_health.cancel_candidates[:2] %}
+                <div class="category-item">
+                  <div class="category-main">
+                    <div class="category-name">{{ item.name }}</div>
+                    <div class="small">同月密集 {{ item.same_month_count }} 个 / 压力 {{ '%.2f'|format(item.pressure) }}%</div>
+                  </div>
+                  <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {% if subscription_health.value_insights %}
+              <div class="section-insight">{{ subscription_health.value_insights[0] }}</div>
               {% endif %}
             </article>
 

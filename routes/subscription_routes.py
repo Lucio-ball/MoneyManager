@@ -7,7 +7,9 @@ from services.subscription_service import (
     build_subscription_payload,
     create_subscription,
     delete_subscription,
+    evaluate_subscription_health,
     get_subscription_by_id,
+    get_subscription_alerts,
     get_subscription_monthly_cost_summary,
     get_subscription_monthly_metrics,
     get_upcoming_subscriptions,
@@ -23,6 +25,8 @@ bp = Blueprint("subscription_routes", __name__)
 def subscriptions_page():
     month = normalize_month(request.args.get("month"))
     summary = get_subscription_monthly_cost_summary()
+    alerts = get_subscription_alerts(month)
+    subscription_health = evaluate_subscription_health(month)
     subscriptions = list_subscriptions()
     upcoming = get_upcoming_subscriptions(days=7)
     cycle_labels = {
@@ -36,6 +40,8 @@ def subscriptions_page():
         active_page="subscriptions",
         month=month,
         summary=summary,
+        alerts=alerts,
+        subscription_health=subscription_health,
         subscriptions=subscriptions,
         upcoming=upcoming,
         cycle_labels=cycle_labels,

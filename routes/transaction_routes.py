@@ -14,6 +14,8 @@ from services.budget_service import get_budget_execution, get_budget_health_prof
 from services.dashboard_service import get_home_risk_cards
 from services.goal_service import get_goal_dashboard_summary
 from services.subscription_service import (
+    evaluate_subscription_health,
+    get_subscription_alerts,
     get_subscription_monthly_cost_summary,
     get_subscription_monthly_metrics,
     get_upcoming_subscriptions,
@@ -67,6 +69,8 @@ def index():
     emotion_light = build_emotion_light(month, financial_summary.get("net_expense", 0), budget_data)
     subscription_summary = get_subscription_monthly_cost_summary()
     subscription_metrics = get_subscription_monthly_metrics(month)
+    subscription_alerts = get_subscription_alerts(month)
+    subscription_health = evaluate_subscription_health(month)
     subscription_upcoming = get_upcoming_subscriptions(days=7)[:3]
     recent_records = get_recent_transactions(limit=10)
     consumption_health = get_monthly_insights(month).get("consumption_health", {})
@@ -88,6 +92,8 @@ def index():
         emotion_light=emotion_light,
         subscription_summary=subscription_summary,
         subscription_metrics=subscription_metrics,
+        subscription_alerts=subscription_alerts,
+        subscription_health=subscription_health,
         subscription_upcoming=subscription_upcoming,
         recent_records=recent_records,
         consumption_health=consumption_health,
