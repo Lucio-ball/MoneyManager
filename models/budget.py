@@ -3,6 +3,8 @@ from statistics import mean
 from extensions.database import get_connection
 from models.subscription import get_subscription_monthly_metrics
 from models.transaction import get_month_expense_by_category
+from models.transaction import get_month_reimbursement_income
+from models.transaction import get_reimbursement_income_by_months
 from models.transaction import get_transactions_by_month
 from utils.date_utils import month_sequence
 
@@ -48,12 +50,15 @@ def get_budget_execution(month: str) -> dict:
 
     category_expense = get_month_expense_by_category(month)
     total_expense = round(sum(category_expense.values()), 2)
+    reimbursement_amount = get_month_reimbursement_income(month)
+    net_expense = round(total_expense - reimbursement_amount, 2)
 
     items = []
     for row in budget_rows:
         category = row["category_main"]
         budget_amount = float(row["budget_amount"])
-        actual = total_expense if category is None else category_expense.get(category, 0.0)
+        gross_actual = total_expense if category is None else category_expense.get(category, 0.0)
+        actual = net_expense if category is None else gross_actual
         execution_rate = round((actual / budget_amount * 100), 2) if budget_amount > 0 else 0.0
 
         if execution_rate >= 100:
@@ -70,6 +75,7 @@ def get_budget_execution(month: str) -> dict:
                 "category_main": category,
                 "budget_amount": round(budget_amount, 2),
                 "actual_expense": round(actual, 2),
+                "actual_gross_expense": round(gross_actual, 2),
                 "execution_rate": execution_rate,
                 "status": status,
             }
@@ -78,6 +84,8 @@ def get_budget_execution(month: str) -> dict:
     return {
         "month": month,
         "total_expense": total_expense,
+        "reimbursement_amount": round(reimbursement_amount, 2),
+        "net_expense": net_expense,
         "items": items,
     }
 
@@ -258,6 +266,8 @@ def _build_category_risks(month: str, execution_items: list[dict]) -> dict:
 def get_budget_health_profile(month: str) -> dict:
     execution = get_budget_execution(month)
     total_expense = float(execution.get("total_expense") or 0)
+    reimbursement_amount = float(execution.get("reimbursement_amount") or 0)
+    net_expense = float(execution.get("net_expense") or 0)
     items = execution.get("items") or []
 
     total_budget_item = next((item for item in items if item.get("category_main") is None), None)
@@ -329,15 +339,20 @@ def get_budget_health_profile(month: str) -> dict:
         monthly_expense_map[row["month"]] = round(float(row["total_expense"] or 0), 2)
 
     execution_trend = []
+    reimbursement_map = get_reimbursement_income_by_months(months)
     for m in months:
         budget_amount = month_budget_map.get(m, 0.0)
-        actual = monthly_expense_map.get(m, 0.0)
+        gross_actual = monthly_expense_map.get(m, 0.0)
+        month_reimbursement = reimbursement_map.get(m, 0.0)
+        actual = round(gross_actual - month_reimbursement, 2)
         trend_execution_rate = round((actual / budget_amount * 100), 2) if budget_amount > 0 else 0.0
         execution_trend.append(
             {
                 "month": m,
                 "budget": round(budget_amount, 2),
                 "actual": round(actual, 2),
+                "gross_actual": round(gross_actual, 2),
+                "reimbursement_amount": round(month_reimbursement, 2),
                 "execution_rate": trend_execution_rate,
             }
         )
@@ -367,6 +382,8 @@ def get_budget_health_profile(month: str) -> dict:
             "components": components,
             "total_budget": round(total_budget, 2),
             "total_expense": round(total_expense, 2),
+            "reimbursement_amount": round(reimbursement_amount, 2),
+            "net_expense": round(net_expense, 2),
             "execution_rate": round(execution_rate, 2),
         },
         "category_risks": category_risks,

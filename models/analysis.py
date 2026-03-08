@@ -469,6 +469,9 @@ def get_analysis_dashboard_data(month: str) -> dict:
 
     total_expense = float(monthly_stats.get("total_expense", 0) or 0)
     total_income = float(monthly_stats.get("total_income", 0) or 0)
+    real_income = float(monthly_stats.get("real_income", total_income) or 0)
+    reimbursement_amount = float(monthly_stats.get("reimbursement_income", 0) or 0)
+    net_expense = float(monthly_stats.get("net_expense", total_expense) or 0)
     balance = float(monthly_stats.get("balance", 0) or 0)
     subscription_cost = float(subscription_metrics.get("estimated_monthly_cost", 0) or 0)
     subscription_ratio = (subscription_cost / total_expense * 100) if total_expense > 0 else 0.0
@@ -482,12 +485,12 @@ def get_analysis_dashboard_data(month: str) -> dict:
     top_category = (monthly_stats.get("category_stats") or [{}])[0].get("name", "其他")
     if balance >= 0:
         summary_sentence = (
-            f"本月收支结余 ¥{balance:.2f}，支出主要集中在「{top_category}」，"
+            f"本月真实收入 ¥{real_income:.2f}，净支出 ¥{net_expense:.2f}，结余 ¥{balance:.2f}，支出主要集中在「{top_category}」，"
             f"冲动消费占比 {impulsive_ratio:.2f}%。"
         )
     else:
         summary_sentence = (
-            f"本月收支为负 ¥{abs(balance):.2f}，支出主要集中在「{top_category}」，"
+            f"本月真实收入 ¥{real_income:.2f}，净支出 ¥{net_expense:.2f}，收支为负 ¥{abs(balance):.2f}，支出主要集中在「{top_category}」，"
             f"建议优先控制高频非刚需消费。"
         )
 
@@ -655,7 +658,11 @@ def get_analysis_dashboard_data(month: str) -> dict:
         "month": month,
         "kpi": {
             "total_expense": round(total_expense, 2),
-            "total_income": round(total_income, 2),
+            "total_income": round(real_income, 2),
+            "cashflow_income": round(total_income, 2),
+            "real_income": round(real_income, 2),
+            "reimbursement_amount": round(reimbursement_amount, 2),
+            "net_expense": round(net_expense, 2),
             "balance": round(balance, 2),
             "subscription_estimated_cost": round(subscription_cost, 2),
             "subscription_ratio": round(subscription_ratio, 2),

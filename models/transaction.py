@@ -6,6 +6,13 @@ from utils.date_utils import month_sequence
 from utils.trend_utils import parse_tags
 
 
+def _is_reimbursement_income_record(record: dict) -> bool:
+    if record.get("type") != "income":
+        return False
+    source = str(record.get("category_sub") or "").strip()
+    return source == "报销"
+
+
 def create_transaction(transaction: dict) -> int:
     tags = transaction.get("tags", [])
     tags_json = json.dumps(tags, ensure_ascii=False)
@@ -78,7 +85,8 @@ def get_monthly_dashboard_data(month: str | None = None) -> dict:
             """
             SELECT
                 COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS total_expense,
-                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS total_income
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS total_income,
+                COALESCE(SUM(CASE WHEN type = 'income' AND TRIM(COALESCE(category_sub, '')) = '报销' THEN amount ELSE 0 END), 0) AS reimbursement_income
             FROM transactions
             WHERE substr(date, 1, 7) = ?
             """,
@@ -109,6 +117,9 @@ def get_monthly_dashboard_data(month: str | None = None) -> dict:
 
     total_expense = float(totals_row["total_expense"] or 0)
     total_income = float(totals_row["total_income"] or 0)
+    reimbursement_income = float(totals_row["reimbursement_income"] or 0)
+    real_income = total_income - reimbursement_income
+    net_expense = total_expense - reimbursement_income
     balance = total_income - total_expense
 
     return {
@@ -116,6 +127,9 @@ def get_monthly_dashboard_data(month: str | None = None) -> dict:
         "summary": {
             "total_expense": round(total_expense, 2),
             "total_income": round(total_income, 2),
+            "real_income": round(real_income, 2),
+            "reimbursement_income": round(reimbursement_income, 2),
+            "net_expense": round(net_expense, 2),
             "balance": round(balance, 2),
         },
         "daily_expense": [
@@ -163,6 +177,13 @@ def get_monthly_stats(month: str) -> dict:
 
     total_expense = sum(record["amount"] for record in records if record["type"] == "expense")
     total_income = sum(record["amount"] for record in records if record["type"] == "income")
+    reimbursement_income = sum(
+        float(record.get("amount") or 0)
+        for record in records
+        if _is_reimbursement_income_record(record)
+    )
+    real_income = total_income - reimbursement_income
+    net_expense = total_expense - reimbursement_income
     balance = total_income - total_expense
 
     daily_map: dict[str, float] = {}
@@ -213,11 +234,55 @@ def get_monthly_stats(month: str) -> dict:
         "month": month,
         "total_expense": round(total_expense, 2),
         "total_income": round(total_income, 2),
+        "real_income": round(real_income, 2),
+        "reimbursement_income": round(reimbursement_income, 2),
+        "net_expense": round(net_expense, 2),
         "balance": round(balance, 2),
         "category_stats": category_stats,
         "tag_stats": tag_stats,
         "daily_expense": daily_expense,
     }
+
+
+def get_month_reimbursement_income(month: str) -> float:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM transactions
+            WHERE type = 'income'
+              AND TRIM(COALESCE(category_sub, '')) = '报销'
+              AND substr(date, 1, 7) = ?
+            """,
+            (month,),
+        ).fetchone()
+
+    return round(float(row["total"] or 0), 2)
+
+
+def get_reimbursement_income_by_months(months: list[str]) -> dict[str, float]:
+    if not months:
+        return {}
+
+    placeholders = ",".join("?" for _ in months)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT substr(date, 1, 7) AS month, ROUND(SUM(amount), 2) AS total
+            FROM transactions
+            WHERE type = 'income'
+              AND TRIM(COALESCE(category_sub, '')) = '报销'
+              AND substr(date, 1, 7) IN ({placeholders})
+            GROUP BY substr(date, 1, 7)
+            """,
+            tuple(months),
+        ).fetchall()
+
+    month_amount_map = {month: 0.0 for month in months}
+    for row in rows:
+        month_amount_map[row["month"]] = round(float(row["total"] or 0), 2)
+
+    return month_amount_map
 
 
 def get_category_trend(category_name: str, month: str) -> dict:

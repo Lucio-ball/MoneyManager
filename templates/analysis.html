@@ -61,12 +61,22 @@
               <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.total_expense) }}</div>
             </article>
             <article class="kpi-card">
-              <div class="kpi-label">总收入</div>
+              <div class="kpi-label">真实收入</div>
               <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.total_income) }}</div>
+              <div class="small">现金流总收入（含报销）：¥{{ '%.2f'|format(kpi.cashflow_income or kpi.total_income) }}</div>
             </article>
             <article class="kpi-card">
               <div class="kpi-label">结余</div>
               <div class="kpi-value mono">¥{{ '%.2f'|format(kpi.balance) }}</div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-label">报销金额</div>
+              <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.reimbursement_amount or 0) }}</div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-label">净支出</div>
+              <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.net_expense or kpi.total_expense) }}</div>
+              <div class="small">净支出 = 总支出 - 报销金额</div>
             </article>
             <article class="kpi-card">
               <div class="kpi-label">订阅折算成本</div>

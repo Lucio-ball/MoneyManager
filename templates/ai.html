@@ -52,6 +52,21 @@
       </section>
 
       <section class="panel">
+        <h2 class="section-title">报销与净支出分析</h2>
+        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
+          <article class="kpi-card">
+            <div class="kpi-label">本月报销金额</div>
+            <div class="kpi-value income mono">¥{{ '%.2f'|format((ai_package.monthly_stats.reimbursement_income if ai_package and ai_package.monthly_stats else 0) or 0) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">本月净支出</div>
+            <div class="kpi-value expense mono">¥{{ '%.2f'|format((ai_package.monthly_stats.net_expense if ai_package and ai_package.monthly_stats else 0) or 0) }}</div>
+            <div class="small">净支出 = 总支出 - 报销金额</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2 class="section-title">消费健康度分析</h2>
         <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
           <article class="kpi-card">

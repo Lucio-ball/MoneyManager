@@ -47,10 +47,20 @@
           <article class="kpi-card">
             <div class="kpi-label">本月总收入</div>
             <div class="kpi-value income mono">¥{{ '%.2f'|format(summary.total_income) }}</div>
+            <div class="small">真实收入（不含报销）：¥{{ '%.2f'|format(summary.real_income or 0) }}</div>
           </article>
           <article class="kpi-card">
             <div class="kpi-label">本月结余</div>
             <div class="kpi-value mono">¥{{ '%.2f'|format(summary.balance) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">本月报销金额</div>
+            <div class="kpi-value income mono">¥{{ '%.2f'|format(summary.reimbursement_income or 0) }}</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">本月净支出</div>
+            <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.net_expense or summary.total_expense) }}</div>
+            <div class="small">净支出 = 总支出 - 报销金额</div>
           </article>
           <article class="kpi-card">
             <div class="kpi-label">今日支出</div>

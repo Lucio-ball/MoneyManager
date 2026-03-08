@@ -36,6 +36,7 @@
         <div class="page-subtitle">当前月份：{{ month }}</div>
         {% include '_page_month_nav.html' %}
         <div class="section-insight">通过预算配置与风险识别联动，持续提升本月资金使用效率。</div>
+        <div class="msg ok" style="margin-top: 10px;">报销抵消：预算执行率按净支出计算（净支出 = 总支出 - 本月报销金额）。</div>
       </section>
 
       <section class="panel">
@@ -67,7 +68,17 @@
         <article class="kpi-card">
           <div class="kpi-label">预算执行率</div>
           <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.execution_rate) }}%</div>
-          <div class="small">预算 ¥{{ '%.2f'|format(budget_health.score.total_budget) }}</div>
+          <div class="small">预算 ¥{{ '%.2f'|format(budget_health.score.total_budget) }} · 净支出 ¥{{ '%.2f'|format(budget_health.score.net_expense or budget_data.net_expense or 0) }}</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">本月报销金额</div>
+          <div class="kpi-value income mono">¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}</div>
+          <div class="small">用于抵消预算支出</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">本月净支出</div>
+          <div class="kpi-value expense mono">¥{{ '%.2f'|format(budget_data.net_expense or budget_data.total_expense) }}</div>
+          <div class="small">总支出 ¥{{ '%.2f'|format(budget_data.total_expense) }}</div>
         </article>
         <article class="kpi-card">
           <div class="kpi-label">订阅压力</div>
@@ -83,7 +94,7 @@
 
       <section class="panel">
         <h2 class="section-title">预算执行情况</h2>
-        <p class="helper-text">本月实际总支出：¥{{ '%.2f'|format(budget_data.total_expense) }}</p>
+        <p class="helper-text">本月净支出：¥{{ '%.2f'|format(budget_data.net_expense or budget_data.total_expense) }}（总支出 ¥{{ '%.2f'|format(budget_data.total_expense) }} - 报销 ¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}）</p>
 
         {% if budget_data['items'] %}
         <div class="table-wrap">
