@@ -92,13 +92,19 @@ def calendar_page():
 
 @bp.route("/api/transactions", methods=["POST"], endpoint="create_transaction_api")
 def create_transaction_api():
-    payload = request.get_json(silent=True) or {}
-    if payload.get("amount") in (None, "") or payload.get("date") in (None, ""):
-        return jsonify({"error": "amount and date are required"}), 400
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = request.form.to_dict()
+        tags = request.form.getlist("tags")
+    else:
+        tags = payload.get("tags", [])
+        if not isinstance(tags, list):
+            tags = []
 
-    tags = payload.get("tags", [])
-    if not isinstance(tags, list):
-        tags = []
+    if payload.get("amount") in (None, ""):
+        return jsonify({"error": "amount is required"}), 400
+
+    payload["date"] = str(payload.get("date") or date.today().isoformat()).strip()
 
     transaction_data, error = normalize_transaction_payload(payload, tags)
     if not transaction_data:

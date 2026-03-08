@@ -67,7 +67,7 @@
         const note = item.note ? item.note : "-";
         return `
           <tr>
-            <td>${escapeHtml(item.created_at || item.date || "-")}</td>
+            <td>${escapeHtml(item.date || "-")}</td>
             <td>${escapeHtml(category || "-")}</td>
             <td>${escapeHtml(tags)}</td>
             <td>${escapeHtml(note)}</td>

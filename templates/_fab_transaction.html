@@ -58,7 +58,10 @@
       <input id="fab-note" type="text" name="note" placeholder="备注（可选）" />
     </div>
 
-    <input type="hidden" id="fab-date" name="date" value="{{ fab_today }}" />
+    <div>
+      <label class="small" for="fab-date">??</label>
+      <input id="fab-date" type="date" name="date" value="{{ fab_today }}" />
+    </div>
 
     <div class="fab-actions">
       <span class="small fab-message" id="fab-message"></span>
