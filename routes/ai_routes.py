@@ -1,5 +1,4 @@
 import json
-from datetime import date
 
 from flask import Blueprint, jsonify, redirect, render_template, request, current_app, url_for
 
@@ -11,13 +10,14 @@ from services.ai_service import (
     get_ai_monthly_package,
 )
 from services.subscription_service import get_subscription_monthly_metrics
+from utils.date_utils import normalize_month
 
 bp = Blueprint("ai_routes", __name__)
 
 
 @bp.route("/ai", methods=["GET", "POST"], endpoint="ai_page")
 def ai_page():
-    month = request.values.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.values.get("month"))
 
     if request.method == "POST":
         archive_month = request.form.get("month") or month
@@ -47,13 +47,13 @@ def ai_page():
 
 @bp.route("/api/ai/monthly", methods=["GET"], endpoint="ai_monthly_api")
 def ai_monthly_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return jsonify(build_ai_monthly_response(month))
 
 
 @bp.route("/api/ai/monthly/export", methods=["GET"], endpoint="ai_monthly_export_api")
 def ai_monthly_export_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     package = get_ai_monthly_package(month)
     payload = {
         "month": month,

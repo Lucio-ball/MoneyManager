@@ -70,6 +70,34 @@
     window.location.href = buildMonthUrl(basePath, targetMonth);
   }
 
+  function syncInternalMonthLinks() {
+    const selectedMonth = (window.MMMonthState && window.MMMonthState.getMonth()) || currentMonthValue();
+    document.querySelectorAll('a[href]').forEach((link) => {
+      const rawHref = link.getAttribute("href") || "";
+      if (!rawHref || rawHref.startsWith("#") || rawHref.startsWith("mailto:") || rawHref.startsWith("tel:")) {
+        return;
+      }
+
+      let url;
+      try {
+        url = new URL(rawHref, window.location.origin);
+      } catch {
+        return;
+      }
+
+      if (url.origin !== window.location.origin) {
+        return;
+      }
+
+      if (url.pathname.startsWith("/api/")) {
+        return;
+      }
+
+      url.searchParams.set("month", normalizeMonth(selectedMonth));
+      link.setAttribute("href", `${url.pathname}${url.search}${url.hash}`);
+    });
+  }
+
   function initGlobalMonthSelector() {
     const selectors = document.querySelectorAll("[data-month-selector]");
     selectors.forEach((root) => {
@@ -160,66 +188,7 @@
     });
   }
 
-  function initInlineMonthNav() {
-    const navNodes = document.querySelectorAll("[data-page-month-nav]");
-    navNodes.forEach((node) => {
-      const basePath = node.dataset.basePath || window.location.pathname;
-      const monthValue = normalizeMonth(
-        (window.MMMonthState && window.MMMonthState.getMonth()) || node.dataset.month || currentMonthValue()
-      );
-      const label = node.querySelector('[data-role="label"]');
-
-      if (label) {
-        label.textContent = formatMonthCn(monthValue);
-      }
-
-      node.querySelector('[data-action="prev"]')?.addEventListener("click", function () {
-        navigateToMonth(basePath, shiftMonth(monthValue, -1));
-      });
-
-      node.querySelector('[data-action="next"]')?.addEventListener("click", function () {
-        navigateToMonth(basePath, shiftMonth(monthValue, 1));
-      });
-    });
-  }
-
-  function initCalendarTimeline() {
-    const timelines = document.querySelectorAll("[data-month-timeline]");
-    timelines.forEach((node) => {
-      const basePath = node.dataset.basePath || window.location.pathname;
-      const selectedMonth = normalizeMonth(
-        (window.MMMonthState && window.MMMonthState.getMonth()) || node.dataset.month || currentMonthValue()
-      );
-      const months = [];
-      for (let i = 11; i >= 0; i -= 1) {
-        months.push(shiftMonth(selectedMonth, -i));
-      }
-
-      node.innerHTML = months
-        .map((monthValue) => {
-          const activeClass = monthValue === selectedMonth ? " active" : "";
-          return `<button type="button" class="month-timeline-item${activeClass}" data-month="${monthValue}">${monthValue}</button>`;
-        })
-        .join("");
-
-      node.querySelectorAll(".month-timeline-item").forEach((button) => {
-        button.addEventListener("click", function () {
-          const monthValue = this.dataset.month;
-          if (monthValue) {
-            navigateToMonth(basePath, monthValue);
-          }
-        });
-      });
-
-      const activeButton = node.querySelector(".month-timeline-item.active");
-      if (activeButton && typeof activeButton.scrollIntoView === "function") {
-        activeButton.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-      }
-    });
-  }
-
   initGlobalState();
   initGlobalMonthSelector();
-  initInlineMonthNav();
-  initCalendarTimeline();
+  syncInternalMonthLinks();
 })();

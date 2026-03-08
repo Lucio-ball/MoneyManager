@@ -33,6 +33,7 @@ from services.transaction_service import (
     normalize_transaction_payload,
     suggest_reimbursement_matches,
 )
+from utils.date_utils import normalize_month
 from utils.risk_utils import build_emotion_light
 
 bp = Blueprint("transaction_routes", __name__)
@@ -45,7 +46,7 @@ def _parse_bool(value) -> bool:
 @bp.route("/", endpoint="index")
 def index():
     category_palette = ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#EF4444"]
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     dashboard = get_monthly_dashboard_data(month=month)
     monthly_stats = get_monthly_stats(month)
     financial_summary = get_monthly_financial_summary(month)
@@ -100,7 +101,7 @@ def index():
 
 @bp.route("/calendar", endpoint="calendar_page")
 def calendar_page():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return render_template(
         "calendar.html",
         active_page="calendar",
@@ -184,7 +185,7 @@ def create_transaction_api():
 
 @bp.route("/api/transactions", methods=["GET"], endpoint="list_transactions_api")
 def list_transactions_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return jsonify(get_transactions_by_month(month))
 
 
@@ -195,19 +196,19 @@ def open_reimbursable_expenses_api():
 
 @bp.route("/api/reimbursements/progress", methods=["GET"], endpoint="reimbursement_progress_api")
 def reimbursement_progress_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return jsonify(get_month_reimbursement_progress(month))
 
 
 @bp.route("/api/stats/monthly", methods=["GET"], endpoint="monthly_stats_api")
 def monthly_stats_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return jsonify(get_monthly_stats(month))
 
 
 @bp.route("/api/dashboard/risk-cards", methods=["GET"], endpoint="dashboard_risk_cards_api")
 def dashboard_risk_cards_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     dashboard = get_monthly_dashboard_data(month=month)
     total_expense = float(dashboard.get("summary", {}).get("net_expense", 0) or 0)
     return jsonify(get_home_risk_cards(month=month, total_expense=total_expense))
@@ -216,7 +217,7 @@ def dashboard_risk_cards_api():
 @bp.route("/api/stats/category", methods=["GET"], endpoint="category_trend_api")
 def category_trend_api():
     category_name = request.args.get("name")
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     if not category_name:
         return jsonify({"error": "name is required"}), 400
     return jsonify(get_category_trend(category_name, month))
@@ -225,7 +226,7 @@ def category_trend_api():
 @bp.route("/api/stats/tags", methods=["GET"], endpoint="tag_trend_api")
 def tag_trend_api():
     tag_name = request.args.get("name")
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     if not tag_name:
         return jsonify({"error": "name is required"}), 400
     return jsonify(get_tag_trend(tag_name, month))
@@ -233,7 +234,7 @@ def tag_trend_api():
 
 @bp.route("/api/calendar", methods=["GET"], endpoint="calendar_summary_api")
 def calendar_summary_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return jsonify(get_calendar_daily_expense(month))
 
 

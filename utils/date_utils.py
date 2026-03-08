@@ -2,6 +2,19 @@ import calendar
 from datetime import date, datetime, timedelta
 
 
+def current_month_value() -> str:
+    return date.today().strftime("%Y-%m")
+
+
+def normalize_month(value: str | None) -> str:
+    text = str(value or "").strip()
+    try:
+        parsed = datetime.strptime(text, "%Y-%m")
+    except ValueError:
+        return current_month_value()
+    return parsed.strftime("%Y-%m")
+
+
 def parse_date(value: str | None) -> date | None:
     if not value:
         return None

@@ -14,12 +14,14 @@ from services.subscription_service import (
     list_subscriptions,
     update_subscription,
 )
+from utils.date_utils import normalize_month
 
 bp = Blueprint("subscription_routes", __name__)
 
 
 @bp.route("/subscriptions", endpoint="subscriptions_page")
 def subscriptions_page():
+    month = normalize_month(request.args.get("month"))
     summary = get_subscription_monthly_cost_summary()
     subscriptions = list_subscriptions()
     upcoming = get_upcoming_subscriptions(days=7)
@@ -32,7 +34,7 @@ def subscriptions_page():
     return render_template(
         "subscriptions.html",
         active_page="subscriptions",
-        month=date.today().strftime("%Y-%m"),
+        month=month,
         summary=summary,
         subscriptions=subscriptions,
         upcoming=upcoming,
@@ -43,17 +45,18 @@ def subscriptions_page():
 
 @bp.route("/subscriptions/add", methods=["GET", "POST"], endpoint="add_subscription_page")
 def add_subscription_page():
+    month = normalize_month(request.values.get("month"))
     if request.method == "POST":
         form_payload = build_subscription_payload(request.form)
         if not form_payload:
-            return redirect(url_for("subscription_routes.add_subscription_page", success="0"))
+            return redirect(url_for("subscription_routes.add_subscription_page", month=month, success="0"))
         create_subscription(form_payload)
-        return redirect(url_for("subscription_routes.subscriptions_page", success="created"))
+        return redirect(url_for("subscription_routes.subscriptions_page", month=month, success="created"))
 
     return render_template(
         "subscriptions_add.html",
         active_page="subscriptions",
-        month=date.today().strftime("%Y-%m"),
+        month=month,
         today=date.today().isoformat(),
         cycle_options=SUBSCRIPTION_CYCLE_OPTIONS,
         success=request.args.get("success"),
@@ -62,6 +65,7 @@ def add_subscription_page():
 
 @bp.route("/subscriptions/edit/<int:subscription_id>", methods=["GET", "POST"], endpoint="edit_subscription_page")
 def edit_subscription_page(subscription_id: int):
+    month = normalize_month(request.values.get("month"))
     existing = get_subscription_by_id(subscription_id)
     if not existing:
         abort(404)
@@ -69,17 +73,21 @@ def edit_subscription_page(subscription_id: int):
     if request.method == "POST":
         form_payload = build_subscription_payload(request.form)
         if not form_payload:
-            return redirect(url_for("subscription_routes.edit_subscription_page", subscription_id=subscription_id, success="0"))
+            return redirect(
+                url_for("subscription_routes.edit_subscription_page", subscription_id=subscription_id, month=month, success="0")
+            )
 
         updated = update_subscription(subscription_id, form_payload)
         if updated:
-            return redirect(url_for("subscription_routes.subscriptions_page", success="updated"))
-        return redirect(url_for("subscription_routes.edit_subscription_page", subscription_id=subscription_id, success="0"))
+            return redirect(url_for("subscription_routes.subscriptions_page", month=month, success="updated"))
+        return redirect(
+            url_for("subscription_routes.edit_subscription_page", subscription_id=subscription_id, month=month, success="0")
+        )
 
     return render_template(
         "subscriptions_edit.html",
         active_page="subscriptions",
-        month=date.today().strftime("%Y-%m"),
+        month=month,
         subscription=existing,
         cycle_options=SUBSCRIPTION_CYCLE_OPTIONS,
         success=request.args.get("success"),
@@ -109,7 +117,7 @@ def list_upcoming_subscriptions_api():
 
 @bp.route("/api/subscriptions/monthly_cost", methods=["GET"], endpoint="subscriptions_monthly_cost_api")
 def subscriptions_monthly_cost_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     summary = get_subscription_monthly_cost_summary()
     metrics = get_subscription_monthly_metrics(month)
     response = dict(summary)

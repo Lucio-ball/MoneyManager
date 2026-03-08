@@ -44,7 +44,6 @@
         <section class="panel">
           <h1 class="page-title">专业财务分析仪表盘</h1>
           <div class="page-subtitle">分析月份：{{ month }}</div>
-          {% include '_page_month_nav.html' %}
           <div class="section-insight">从结构、节奏、趋势与风险四个维度给出可执行洞察，支持持续优化消费行为。</div>
         </section>
 
@@ -121,30 +120,68 @@
               <div class="section-desc">基于消费结构、标签结构、趋势与冲动比例自动识别当前消费性格。</div>
             </div>
           </div>
-          <div class="category-item" style="margin-top: 10px;">
-            <div class="category-main">
-              <div class="category-name">{{ consumption_persona.label or '稳健型' }}</div>
-              <div class="small">{{ consumption_persona.description or '当前消费模式较稳定，建议持续跟踪关键指标。' }}</div>
-            </div>
-          </div>
-          {% if consumption_persona.reasons %}
-          <div class="category-list" style="margin-top: 10px;">
-            {% for reason in consumption_persona.reasons %}
-            <div class="category-item">
-              <div class="category-main">
-                <div class="category-name">判定依据</div>
-                <div class="small">{{ reason }}</div>
+          {% if consumption_persona %}
+          {% set persona_metrics = consumption_persona.metrics if consumption_persona.metrics else {} %}
+          {% set top_frequency = rhythm.frequency.high_frequency_categories[0] if rhythm.frequency and rhythm.frequency.high_frequency_categories else None %}
+          {% set spending_stability_score = consumption_health.breakdown.spending_stability if consumption_health.breakdown else 0 %}
+          <div class="persona-card" style="margin-top: 10px;">
+            <div class="persona-card-head">
+              <div>
+                <div class="persona-label">消费行为画像</div>
+                <div class="persona-title">{{ consumption_persona.label or '稳健型' }}</div>
               </div>
+              <span class="persona-badge">{{ consumption_persona.type or 'steady' }}</span>
             </div>
-            {% endfor %}
+            <div class="small">{{ consumption_persona.description or '当前消费模式较稳定，建议持续跟踪关键指标。' }}</div>
+            <div class="persona-metric-grid">
+              <article class="persona-metric-card">
+                <div class="persona-metric-label">消费类型标签</div>
+                <div class="persona-metric-value">{{ consumption_persona.label or '--' }}</div>
+              </article>
+              <article class="persona-metric-card">
+                <div class="persona-metric-label">高频消费类别</div>
+                <div class="persona-metric-value">{% if top_frequency %}{{ top_frequency.name }}{% else %}--{% endif %}</div>
+                {% if top_frequency %}
+                <div class="small">{{ top_frequency.count }} 次</div>
+                {% endif %}
+              </article>
+              <article class="persona-metric-card">
+                <div class="persona-metric-label">平均客单价</div>
+                <div class="persona-metric-value mono">¥{{ '%.2f'|format(rhythm.frequency.avg_amount or 0) }}</div>
+              </article>
+              <article class="persona-metric-card">
+                <div class="persona-metric-label">消费稳定度</div>
+                <div class="persona-metric-value mono">{{ '%.0f'|format(spending_stability_score or 0) }}</div>
+                <div class="small">
+                  {% if spending_stability_score >= 80 %}
+                  优秀
+                  {% elif spending_stability_score >= 60 %}
+                  良好
+                  {% elif spending_stability_score >= 40 %}
+                  一般
+                  {% else %}
+                  需关注
+                  {% endif %}
+                </div>
+              </article>
+            </div>
+            {% if consumption_persona.reasons %}
+            <div class="persona-reason-list">
+              {% for reason in consumption_persona.reasons %}
+              <div class="persona-reason-item">{{ reason }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <div class="small persona-footnote">
+              冲动占比 {{ '%.2f'|format(persona_metrics.impulsive_ratio or 0) }}%
+              ｜ 学习投资 {{ '%.2f'|format(persona_metrics.learning_ratio or 0) }}%
+              ｜ 社交驱动 {{ '%.2f'|format(persona_metrics.social_ratio or 0) }}%
+              ｜ 订阅占比 {{ '%.2f'|format(persona_metrics.subscription_ratio or 0) }}%
+            </div>
           </div>
+          {% else %}
+          <div class="helper-text">当前月份暂无可展示的消费行为画像。</div>
           {% endif %}
-          <div class="small" style="margin-top: 10px;">
-            冲动占比 {{ '%.2f'|format((consumption_persona.metrics.impulsive_ratio if consumption_persona.metrics else 0)) }}%
-            ｜ 学习投资 {{ '%.2f'|format((consumption_persona.metrics.learning_ratio if consumption_persona.metrics else 0)) }}%
-            ｜ 社交驱动 {{ '%.2f'|format((consumption_persona.metrics.social_ratio if consumption_persona.metrics else 0)) }}%
-            ｜ 订阅占比 {{ '%.2f'|format((consumption_persona.metrics.subscription_ratio if consumption_persona.metrics else 0)) }}%
-          </div>
         </section>
 
         <section class="panel analysis-block">

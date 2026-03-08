@@ -7,12 +7,14 @@ from services.goal_service import (
     get_goal_progress_list,
     validate_goal_payload,
 )
+from utils.date_utils import normalize_month
 
 bp = Blueprint("goal_routes", __name__)
 
 
 @bp.route("/goals", methods=["GET", "POST"], endpoint="goals_page")
 def goals_page():
+    month = normalize_month(request.values.get("month"))
     if request.method == "POST":
         payload = {
             "name": request.form.get("name"),
@@ -22,10 +24,10 @@ def goals_page():
         }
         normalized_data, error = validate_goal_payload(payload)
         if not normalized_data:
-            return redirect(url_for("goal_routes.goals_page", success="0", error=error))
+            return redirect(url_for("goal_routes.goals_page", month=month, success="0", error=error))
 
         create_goal(**normalized_data)
-        return redirect(url_for("goal_routes.goals_page", success="1"))
+        return redirect(url_for("goal_routes.goals_page", month=month, success="1"))
 
     success = request.args.get("success")
     error = request.args.get("error")
@@ -33,6 +35,7 @@ def goals_page():
     return render_template(
         "goals.html",
         active_page="goals",
+        month=month,
         today=date.today().isoformat(),
         success=success,
         error=error,

@@ -43,6 +43,7 @@
           {% endif %}
 
           <form method="post" action="/subscriptions/edit/{{ subscription.id }}" class="grid-2">
+            <input type="hidden" name="month" value="{{ month }}" />
             <div>
               <label class="small" for="name">订阅名称</label>
               <input id="name" type="text" name="name" value="{{ subscription.name }}" required />

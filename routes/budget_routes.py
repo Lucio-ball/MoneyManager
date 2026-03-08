@@ -1,16 +1,15 @@
-from datetime import date
-
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 from config import CATEGORY_OPTIONS
 from services.budget_service import get_budget_execution, get_budget_health_profile, upsert_budget
+from utils.date_utils import normalize_month
 
 bp = Blueprint("budget_routes", __name__)
 
 
 @bp.route("/budget", methods=["GET", "POST"], endpoint="budget_page")
 def budget_page():
-    month = request.values.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.values.get("month"))
 
     if request.method == "POST":
         budget_month = request.form.get("month") or month
@@ -38,10 +37,11 @@ def budget_page():
 @bp.route("/api/budgets", methods=["POST"], endpoint="create_budget_api")
 def create_budget_api():
     payload = request.get_json(silent=True) or {}
-    month = payload.get("month")
+    raw_month = payload.get("month")
     budget_amount = payload.get("budget_amount")
-    if not month or budget_amount in (None, ""):
+    if not raw_month or budget_amount in (None, ""):
         return jsonify({"error": "month and budget_amount are required"}), 400
+    month = normalize_month(raw_month)
 
     category_main = payload.get("category_main") or None
     budget_id = upsert_budget(month, category_main, float(budget_amount))
@@ -50,7 +50,7 @@ def create_budget_api():
 
 @bp.route("/api/budgets", methods=["GET"], endpoint="list_budget_api")
 def list_budget_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     execution = get_budget_execution(month)
     health = get_budget_health_profile(month)
     return jsonify(
@@ -66,5 +66,5 @@ def list_budget_api():
 
 @bp.route("/api/budgets/health", methods=["GET"], endpoint="budget_health_api")
 def budget_health_api():
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    month = normalize_month(request.args.get("month"))
     return jsonify(get_budget_health_profile(month))

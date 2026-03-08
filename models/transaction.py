@@ -1,5 +1,6 @@
 import json
 from datetime import date
+from math import sqrt
 
 from extensions.database import get_connection
 from models.reimbursement import get_expense_reimbursement_map
@@ -62,6 +63,19 @@ def _attach_reimbursement_fields(records: list[dict]) -> list[dict]:
         if reimbursement:
             item["reimbursement"] = reimbursement
     return records
+
+
+def _is_subscription_expense_record(record: dict) -> bool:
+    if record.get("type") != "expense":
+        return False
+    tags = set(record.get("tags") or [])
+    category_sub = str(record.get("category_sub") or "").strip()
+    note = str(record.get("note") or "").strip()
+    return "订阅" in tags or category_sub == "订阅扣费" or note.startswith("[订阅自动扣费]")
+
+
+def _is_reimbursable_expense_record(record: dict) -> bool:
+    return record.get("type") == "expense" and bool(record.get("reimbursement"))
 
 
 def get_recent_transactions(limit: int = 10) -> list[dict]:
@@ -419,33 +433,118 @@ def get_calendar_daily_expense(month: str) -> dict:
         rows = conn.execute(
             """
             SELECT
+                id,
+                amount,
+                type,
                 date,
-                ROUND(SUM(amount), 2) AS total_expense,
-                COUNT(*) AS expense_count
+                category_main,
+                category_sub,
+                tags,
+                note
             FROM transactions
-            WHERE type = 'expense' AND substr(date, 1, 7) = ?
-            GROUP BY date
-            ORDER BY date ASC
+            WHERE substr(date, 1, 7) = ?
+            ORDER BY date ASC, id DESC
             """,
             (month,),
         ).fetchall()
 
-    days = []
-    max_expense = 0.0
+    records: list[dict] = []
     for row in rows:
-        amount = round(float(row["total_expense"] or 0), 2)
-        max_expense = max(max_expense, amount)
+        item = dict(row)
+        item["amount"] = round(float(item["amount"] or 0), 2)
+        item["tags"] = parse_tags(item.get("tags"))
+        records.append(item)
+
+    records = _attach_reimbursement_fields(records)
+
+    day_map: dict[str, dict] = {}
+    expense_amounts: list[float] = []
+    for item in records:
+        day = item["date"]
+        day_info = day_map.setdefault(
+            day,
+            {
+                "date": day,
+                "total_expense": 0.0,
+                "expense_count": 0,
+                "income_count": 0,
+                "markers": {
+                    "subscription": False,
+                    "reimbursement": False,
+                    "high_spending": False,
+                    "budget_warning": False,
+                },
+            },
+        )
+
+        if item.get("type") == "expense":
+            day_info["total_expense"] = round(day_info["total_expense"] + float(item["amount"] or 0), 2)
+            day_info["expense_count"] += 1
+            if _is_subscription_expense_record(item):
+                day_info["markers"]["subscription"] = True
+            if _is_reimbursable_expense_record(item):
+                day_info["markers"]["reimbursement"] = True
+        else:
+            day_info["income_count"] += 1
+            if _is_reimbursement_income_record(item):
+                day_info["markers"]["reimbursement"] = True
+
+    budget_warning_categories: set[str] = set()
+    try:
+        from models.budget import get_budget_execution
+
+        budget_execution = get_budget_execution(month)
+        budget_warning_categories = {
+            str(item.get("category_main") or "").strip()
+            for item in (budget_execution.get("items") or [])
+            if item.get("category_main") and float(item.get("execution_rate") or 0) >= 80
+        }
+    except Exception:
+        budget_warning_categories = set()
+
+    max_expense = 0.0
+    for item in records:
+        if item.get("type") != "expense":
+            continue
+        day = item["date"]
+        day_info = day_map[day]
+        max_expense = max(max_expense, float(day_info["total_expense"] or 0))
+        if str(item.get("category_main") or "").strip() in budget_warning_categories:
+            day_info["markers"]["budget_warning"] = True
+
+    for day_info in day_map.values():
+        if float(day_info["total_expense"] or 0) > 0:
+            expense_amounts.append(float(day_info["total_expense"] or 0))
+
+    if expense_amounts:
+        avg_expense = sum(expense_amounts) / len(expense_amounts)
+        variance = sum((amount - avg_expense) ** 2 for amount in expense_amounts) / len(expense_amounts)
+        std_dev = sqrt(variance)
+        high_spending_threshold = max(avg_expense * 1.5, avg_expense + std_dev)
+    else:
+        high_spending_threshold = 0.0
+
+    days = []
+    for day in sorted(day_map.keys()):
+        day_info = day_map[day]
+        total_expense = round(float(day_info["total_expense"] or 0), 2)
+        day_info["markers"]["high_spending"] = total_expense > 0 and total_expense >= high_spending_threshold
+        marker_names = [name for name, enabled in day_info["markers"].items() if enabled]
         days.append(
             {
-                "date": row["date"],
-                "total_expense": amount,
-                "expense_count": int(row["expense_count"] or 0),
+                "date": day_info["date"],
+                "total_expense": total_expense,
+                "expense_count": int(day_info["expense_count"] or 0),
+                "income_count": int(day_info["income_count"] or 0),
+                "markers": day_info["markers"],
+                "marker_names": marker_names,
             }
         )
 
     return {
         "month": month,
         "max_expense": round(max_expense, 2),
+        "high_spending_threshold": round(high_spending_threshold, 2),
         "days": days,
     }
 
@@ -465,25 +564,55 @@ def get_calendar_day_details(target_date: str) -> dict:
                 note,
                 created_at
             FROM transactions
-            WHERE type = 'expense' AND date = ?
-            ORDER BY id DESC
+            WHERE date = ?
+            ORDER BY type ASC, id DESC
             """,
             (target_date,),
         ).fetchall()
 
-    transactions = []
+    records: list[dict] = []
     total_expense = 0.0
+    total_income = 0.0
     for row in rows:
         item = dict(row)
         item["amount"] = round(float(item["amount"] or 0), 2)
         item["tags"] = parse_tags(item.get("tags"))
-        total_expense += item["amount"]
+        if item.get("type") == "expense":
+            total_expense += item["amount"]
+        elif item.get("type") == "income":
+            total_income += item["amount"]
+        records.append(item)
+
+    records = _attach_reimbursement_fields(records)
+
+    grouped_transactions = {
+        "normal_expense": [],
+        "reimbursable_expense": [],
+        "subscription": [],
+        "income": [],
+    }
+    transactions = []
+    for item in records:
+        if item.get("type") == "income":
+            group_key = "income"
+        elif _is_subscription_expense_record(item):
+            group_key = "subscription"
+        elif _is_reimbursable_expense_record(item):
+            group_key = "reimbursable_expense"
+        else:
+            group_key = "normal_expense"
+
+        item["group"] = group_key
+        grouped_transactions[group_key].append(item)
         transactions.append(item)
 
     return {
         "date": target_date,
         "total_expense": round(total_expense, 2),
-        "expense_count": len(transactions),
+        "total_income": round(total_income, 2),
+        "expense_count": sum(1 for item in transactions if item.get("type") == "expense"),
+        "transaction_count": len(transactions),
+        "grouped_transactions": grouped_transactions,
         "transactions": transactions,
     }
 
