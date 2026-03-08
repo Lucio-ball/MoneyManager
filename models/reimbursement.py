@@ -357,6 +357,52 @@ def get_month_reimbursement_progress(month: str) -> dict:
     }
 
 
+def get_month_pending_reimbursement_summary(month: str) -> dict:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                t.id,
+                t.category_main,
+                marker.amount AS target_amount,
+                COALESCE((
+                    SELECT SUM(amount)
+                    FROM reimbursement_links rl
+                    WHERE rl.expense_transaction_id = t.id
+                      AND rl.reimbursement_transaction_id IS NOT NULL
+                ), 0) AS reimbursed_amount
+            FROM reimbursement_links marker
+            JOIN transactions t ON t.id = marker.expense_transaction_id
+            WHERE marker.reimbursement_transaction_id IS NULL
+              AND substr(t.date, 1, 7) = ?
+            ORDER BY t.date DESC, t.id DESC
+            """,
+            (month,),
+        ).fetchall()
+
+    total_pending_amount = 0.0
+    category_pending_amount: dict[str, float] = {}
+    pending_count = 0
+    for row in rows:
+        target_amount = round(float(row["target_amount"] or 0), 2)
+        reimbursed_amount = min(round(float(row["reimbursed_amount"] or 0), 2), target_amount)
+        pending_amount = round(max(target_amount - reimbursed_amount, 0.0), 2)
+        if pending_amount <= 0:
+            continue
+
+        pending_count += 1
+        total_pending_amount += pending_amount
+        category = str(row["category_main"] or "other").strip() or "other"
+        category_pending_amount[category] = round(category_pending_amount.get(category, 0.0) + pending_amount, 2)
+
+    return {
+        "month": month,
+        "pending_amount": round(total_pending_amount, 2),
+        "pending_count": pending_count,
+        "category_pending_amount": category_pending_amount,
+    }
+
+
 def get_expense_reimbursement_map(expense_transaction_ids: list[int]) -> dict[int, dict]:
     if not expense_transaction_ids:
         return {}

@@ -295,35 +295,35 @@ def _risk_level(score: float) -> str:
     return "低风险"
 
 
-def _build_risk_radar(consumption_health: dict, subscription_ratio: float) -> dict:
+def _build_risk_radar(consumption_health: dict, subscription_ratio: float, budget_health: dict) -> dict:
     metrics = consumption_health.get("metrics", {})
     impulsive_ratio = float(metrics.get("impulsive_ratio", 0) or 0)
-    learning_ratio = float(metrics.get("learning_ratio", 0) or 0)
     category_hhi = float(metrics.get("category_hhi", 0) or 0)
     daily_cv = float(metrics.get("daily_cv", 0) or 0)
+    budget_execution_rate = float((budget_health.get("score") or {}).get("execution_rate", 0) or 0)
 
-    impulsive_risk = _clamp_score((impulsive_ratio / 40) * 100)
+    impulse_risk = _clamp_score((impulsive_ratio / 40) * 100)
+    budget_risk = _clamp_score(max(budget_execution_rate - 70, 0) / 50 * 100)
     subscription_pressure = _clamp_score((subscription_ratio / 25) * 100)
     category_concentration = _clamp_score(((category_hhi - 0.18) / 0.42) * 100)
     spending_volatility = _clamp_score((daily_cv / 1.2) * 100)
-    learning_investment_risk = _clamp_score(((12 - learning_ratio) / 12) * 100)
 
     dimensions = [
-        {"key": "impulsive_risk", "label": "冲动风险", "value": impulsive_risk},
-        {"key": "subscription_pressure", "label": "订阅压力", "value": subscription_pressure},
-        {"key": "category_concentration", "label": "类别集中度", "value": category_concentration},
-        {"key": "spending_volatility", "label": "消费波动度", "value": spending_volatility},
-        {"key": "learning_investment_risk", "label": "学习投资度", "value": learning_investment_risk},
+        {"key": "impulse_risk", "label": "\u51b2\u52a8\u98ce\u9669", "value": impulse_risk},
+        {"key": "budget_risk", "label": "\u9884\u7b97\u98ce\u9669", "value": budget_risk},
+        {"key": "subscription_pressure", "label": "\u8ba2\u9605\u538b\u529b", "value": subscription_pressure},
+        {"key": "category_concentration", "label": "\u7c7b\u522b\u96c6\u4e2d\u5ea6", "value": category_concentration},
+        {"key": "spending_volatility", "label": "\u6d88\u8d39\u6ce2\u52a8\u5ea6", "value": spending_volatility},
     ]
 
     risk_score = round(sum(item["value"] for item in dimensions) / len(dimensions), 2)
 
     explain_map = {
-        "impulsive_risk": f"冲动消费占比 {impulsive_ratio:.2f}%，对预算稳定性形成压力。",
-        "subscription_pressure": f"订阅成本占比 {subscription_ratio:.2f}%，固定支出弹性较低。",
-        "category_concentration": f"类别集中度指数 HHI={category_hhi:.4f}，头部类别聚集明显。",
-        "spending_volatility": f"日支出波动系数 CV={daily_cv:.4f}，消费节奏存在起伏。",
-        "learning_investment_risk": f"学习投资占比 {learning_ratio:.2f}%，长期投入仍有提升空间。",
+        "impulse_risk": f"\u51b2\u52a8\u6d88\u8d39\u5360\u6bd4 {impulsive_ratio:.2f}%\uff0c\u5bb9\u6613\u63a8\u9ad8\u77ed\u671f\u652f\u51fa\u98ce\u9669\u3002",
+        "budget_risk": f"\u9884\u7b97\u6267\u884c\u7387 {budget_execution_rate:.2f}%\uff0c\u5f53\u524d\u9884\u7b97\u538b\u529b\u5df2\u8fdb\u5165\u98ce\u9669\u89c2\u6d4b\u533a\u95f4\u3002",
+        "subscription_pressure": f"\u8ba2\u9605\u6210\u672c\u5360\u6bd4 {subscription_ratio:.2f}%\uff0c\u56fa\u5b9a\u652f\u51fa\u5f39\u6027\u8f83\u4f4e\u3002",
+        "category_concentration": f"\u7c7b\u522b\u96c6\u4e2d\u5ea6\u6307\u6570 HHI={category_hhi:.4f}\uff0c\u5934\u90e8\u7c7b\u522b\u805a\u96c6\u660e\u663e\u3002",
+        "spending_volatility": f"\u65e5\u652f\u51fa\u6ce2\u52a8\u7cfb\u6570 CV={daily_cv:.4f}\uff0c\u6d88\u8d39\u8282\u594f\u5b58\u5728\u8d77\u4f0f\u3002",
     }
 
     top_dims = sorted(dimensions, key=lambda item: item["value"], reverse=True)[:3]
@@ -336,10 +336,10 @@ def _build_risk_radar(consumption_health: dict, subscription_ratio: float) -> di
         "explanations": explanations,
         "metrics": {
             "impulsive_ratio": round(impulsive_ratio, 2),
+            "budget_execution_rate": round(budget_execution_rate, 2),
             "subscription_ratio": round(subscription_ratio, 2),
             "category_hhi": round(category_hhi, 4),
             "daily_cv": round(daily_cv, 4),
-            "learning_ratio": round(learning_ratio, 2),
         },
     }
 
@@ -441,7 +441,8 @@ def get_monthly_insights(month: str) -> dict:
         month_total_map=month_total_map,
         consumption_health=consumption_health,
     )
-    risk_radar = _build_risk_radar(consumption_health, subscription_ratio)
+    budget_health = get_budget_health_profile(month)
+    risk_radar = _build_risk_radar(consumption_health, subscription_ratio, budget_health)
 
     return {
         "month": month,

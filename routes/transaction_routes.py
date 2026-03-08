@@ -31,6 +31,7 @@ from services.transaction_service import (
     get_today_expense,
     get_transactions_by_month,
     normalize_transaction_payload,
+    suggest_reimbursement_matches,
 )
 from utils.risk_utils import build_emotion_light
 
@@ -169,7 +170,16 @@ def create_transaction_api():
     if reimburse_expense_id is not None:
         link_reimbursement_to_expense(reimburse_expense_id, created_id, reimburse_link_amount)
 
-    return jsonify({"id": created_id}), 201
+    response_payload = {"id": created_id}
+    if transaction_data["type"] == "income" and str(transaction_data.get("category_sub") or "").strip() == "报销":
+        response_payload["match_suggestions"] = suggest_reimbursement_matches(
+            reimbursement_amount=float(transaction_data["amount"]),
+            reimbursement_date=transaction_data["date"],
+            reimbursement_note=transaction_data.get("note"),
+            limit=3,
+        )
+
+    return jsonify(response_payload), 201
 
 
 @bp.route("/api/transactions", methods=["GET"], endpoint="list_transactions_api")

@@ -36,7 +36,7 @@
         <div class="page-subtitle">当前月份：{{ month }}</div>
         {% include '_page_month_nav.html' %}
         <div class="section-insight">通过预算配置与风险识别联动，持续提升本月资金使用效率。</div>
-        <div class="msg ok" style="margin-top: 10px;">报销抵消：预算执行率按净支出计算（净支出 = 总支出 - 本月报销金额）。</div>
+        <div class="msg ok" style="margin-top: 10px;">预算执行率按净支出计算；待报销会先从预算占用中扣除。</div>
       </section>
 
       <section class="panel">
@@ -73,12 +73,17 @@
         <article class="kpi-card">
           <div class="kpi-label">本月报销金额</div>
           <div class="kpi-value income mono">¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}</div>
-          <div class="small">用于抵消预算支出</div>
+          <div class="small">已到账报销，直接抵消预算支出</div>
         </article>
         <article class="kpi-card">
           <div class="kpi-label">本月净支出</div>
           <div class="kpi-value expense mono">¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }}</div>
           <div class="small">总支出 ¥{{ '%.2f'|format(budget_data.gross_expense) }}</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">待报销占用</div>
+          <div class="kpi-value mono">¥{{ '%.2f'|format(budget_data.pending_reimbursement or 0) }}</div>
+          <div class="small">预算按净支出计算时已先扣除</div>
         </article>
         <article class="kpi-card">
           <div class="kpi-label">订阅压力</div>
@@ -94,7 +99,7 @@
 
       <section class="panel">
         <h2 class="section-title">预算执行情况</h2>
-        <p class="helper-text">本月净支出：¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }}（总支出 ¥{{ '%.2f'|format(budget_data.gross_expense) }} - 报销 ¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}）</p>
+        <p class="helper-text">本月总支出：¥{{ '%.2f'|format(budget_data.gross_expense) }}；待报销：¥{{ '%.2f'|format(budget_data.pending_reimbursement or 0) }}；已到账报销：¥{{ '%.2f'|format(budget_data.reimbursement_amount or 0) }}；预算执行按净支出 ¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }} 计算。</p>
 
         {% if budget_data['items'] %}
         <div class="table-wrap">
@@ -104,6 +109,7 @@
               <th>类别</th>
               <th>预算</th>
               <th>实际支出</th>
+              <th>待报销</th>
               <th>执行率</th>
               <th>状态</th>
             </tr>
@@ -114,6 +120,7 @@
               <td>{{ item.category_main if item.category_main else '总预算' }}</td>
               <td>¥{{ '%.2f'|format(item.budget_amount) }}</td>
               <td>¥{{ '%.2f'|format(item.actual_expense) }}</td>
+              <td>¥{{ '%.2f'|format(item.pending_reimbursement or 0) }}</td>
               <td>{{ '%.2f'|format(item.execution_rate) }}%</td>
               <td>
                 {% if item.status == '正常' %}

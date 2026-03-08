@@ -1,6 +1,7 @@
 from statistics import mean
 
 from extensions.database import get_connection
+from models.reimbursement import get_month_pending_reimbursement_summary
 from models.subscription import get_subscription_monthly_metrics
 from models.transaction import get_month_expense_by_category
 from models.transaction import get_monthly_financial_summary
@@ -50,16 +51,20 @@ def get_budget_execution(month: str) -> dict:
 
     category_expense = get_month_expense_by_category(month)
     financial_summary = get_monthly_financial_summary(month)
+    pending_reimbursement_summary = get_month_pending_reimbursement_summary(month)
     gross_expense = float(financial_summary.get("gross_expense") or 0)
     reimbursement_amount = float(financial_summary.get("reimbursement_income") or 0)
-    net_expense = float(financial_summary.get("net_expense") or 0)
+    pending_reimbursement = float(pending_reimbursement_summary.get("pending_amount") or 0)
+    category_pending_map = pending_reimbursement_summary.get("category_pending_amount") or {}
+    net_expense = max(float(financial_summary.get("net_expense") or 0) - pending_reimbursement, 0.0)
 
     items = []
     for row in budget_rows:
         category = row["category_main"]
         budget_amount = float(row["budget_amount"])
         gross_actual = gross_expense if category is None else category_expense.get(category, 0.0)
-        actual = net_expense if category is None else gross_actual
+        category_pending_reimbursement = 0.0 if category is None else float(category_pending_map.get(category, 0.0) or 0)
+        actual = net_expense if category is None else max(gross_actual - category_pending_reimbursement, 0.0)
         execution_rate = round((actual / budget_amount * 100), 2) if budget_amount > 0 else 0.0
 
         if execution_rate >= 100:
@@ -77,6 +82,7 @@ def get_budget_execution(month: str) -> dict:
                 "budget_amount": round(budget_amount, 2),
                 "actual_expense": round(actual, 2),
                 "actual_gross_expense": round(gross_actual, 2),
+                "pending_reimbursement": round(category_pending_reimbursement, 2),
                 "execution_rate": execution_rate,
                 "status": status,
             }
@@ -86,6 +92,7 @@ def get_budget_execution(month: str) -> dict:
         "month": month,
         "gross_expense": round(gross_expense, 2),
         "reimbursement_amount": round(reimbursement_amount, 2),
+        "pending_reimbursement": round(pending_reimbursement, 2),
         "net_expense": round(net_expense, 2),
         "total_expense": round(gross_expense, 2),
         "items": items,
@@ -346,7 +353,8 @@ def get_budget_health_profile(month: str) -> dict:
         budget_amount = month_budget_map.get(m, 0.0)
         gross_actual = monthly_expense_map.get(m, 0.0)
         month_reimbursement = reimbursement_map.get(m, 0.0)
-        actual = round(gross_actual - month_reimbursement, 2)
+        month_pending_reimbursement = float(get_month_pending_reimbursement_summary(m).get("pending_amount") or 0)
+        actual = round(max(gross_actual - month_reimbursement - month_pending_reimbursement, 0.0), 2)
         trend_execution_rate = round((actual / budget_amount * 100), 2) if budget_amount > 0 else 0.0
         execution_trend.append(
             {
@@ -355,6 +363,7 @@ def get_budget_health_profile(month: str) -> dict:
                 "actual": round(actual, 2),
                 "gross_actual": round(gross_actual, 2),
                 "reimbursement_amount": round(month_reimbursement, 2),
+                "pending_reimbursement": round(month_pending_reimbursement, 2),
                 "execution_rate": trend_execution_rate,
             }
         )
@@ -386,6 +395,7 @@ def get_budget_health_profile(month: str) -> dict:
             "gross_expense": round(gross_expense, 2),
             "total_expense": round(gross_expense, 2),
             "reimbursement_amount": round(reimbursement_amount, 2),
+            "pending_reimbursement": round(float(execution.get("pending_reimbursement") or 0), 2),
             "net_expense": round(net_expense, 2),
             "execution_rate": round(execution_rate, 2),
         },
