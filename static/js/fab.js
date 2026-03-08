@@ -17,13 +17,20 @@
   const expenseCategorySub = document.getElementById("fab-expense-category-sub");
   const expenseTags = document.getElementById("fab-expense-tags");
   const incomeSource = document.getElementById("fab-income-source");
+  const reimbursableCheckbox = document.getElementById("fab-is-reimbursable");
+  const reimbursementTargetWrap = document.getElementById("fab-expense-reimbursement-amount");
+  const reimbursementTargetInput = document.getElementById("fab-reimbursement-target-amount");
+  const reimbursementBox = document.getElementById("fab-expense-reimbursement-box");
+  const reimbursementLinkWrap = document.getElementById("fab-income-reimbursement-link");
+  const reimbursementExpenseSelect = document.getElementById("fab-reimbursement-expense-select");
+  const reimbursementLinkAmountWrap = document.getElementById("fab-income-reimbursement-amount");
+  const reimbursementLinkAmountInput = document.getElementById("fab-reimbursement-link-amount");
 
   if (!trigger || !panel || !form) {
     return;
   }
 
   const navOpenButtons = document.querySelectorAll(".js-fab-open");
-
   const today = new Date();
   const isoDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
@@ -32,13 +39,65 @@
     messageEl.classList.toggle("danger", Boolean(isError));
   };
 
+  const isReimbursementIncome = function () {
+    return typeInput.value === "income" && incomeSourceInput.value.trim() === "报销";
+  };
+
+  const syncLinkAmountPlaceholder = function () {
+    if (!reimbursementExpenseSelect || !reimbursementLinkAmountInput) {
+      return;
+    }
+    const selected = reimbursementExpenseSelect.selectedOptions[0];
+    const pendingAmount = selected ? selected.getAttribute("data-pending-amount") : "";
+    reimbursementLinkAmountInput.placeholder = pendingAmount ? `待报销金额 ${pendingAmount}` : "默认等于本次报销收入";
+  };
+
+  const refreshReimbursementOptions = async function () {
+    if (!reimbursementExpenseSelect) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/reimbursements/open-expenses");
+      if (!response.ok) {
+        return;
+      }
+      const rows = await response.json();
+      const options = ['<option value="">不关联</option>'];
+      (Array.isArray(rows) ? rows : []).forEach((expense) => {
+        const categorySub = expense.category_sub ? `/${expense.category_sub}` : "";
+        options.push(
+          `<option value="${expense.id}" data-pending-amount="${Number(expense.pending_amount || 0).toFixed(2)}">${expense.date} · ${expense.category_main || "其他"}${categorySub} · 待报销 ¥${Number(expense.pending_amount || 0).toFixed(2)}</option>`
+        );
+      });
+      reimbursementExpenseSelect.innerHTML = options.join("");
+      syncLinkAmountPlaceholder();
+    } catch (_error) {
+      // Keep server-rendered options as fallback.
+    }
+  };
+
   const toggleFieldsByType = function () {
     const isIncome = typeInput.value === "income";
+    const shouldShowReimbursementLink = isReimbursementIncome();
+    const shouldShowReimbursementTarget = !isIncome && reimbursableCheckbox && reimbursableCheckbox.checked;
 
     expenseCategoryMain.style.display = isIncome ? "none" : "";
     expenseCategorySub.style.display = isIncome ? "none" : "";
     expenseTags.style.display = isIncome ? "none" : "";
+    if (reimbursementBox) {
+      reimbursementBox.style.display = isIncome ? "none" : "";
+    }
+    if (reimbursementTargetWrap) {
+      reimbursementTargetWrap.style.display = shouldShowReimbursementTarget ? "" : "none";
+    }
     incomeSource.style.display = isIncome ? "" : "none";
+    if (reimbursementLinkWrap) {
+      reimbursementLinkWrap.style.display = shouldShowReimbursementLink ? "" : "none";
+    }
+    if (reimbursementLinkAmountWrap) {
+      reimbursementLinkAmountWrap.style.display = shouldShowReimbursementLink && reimbursementExpenseSelect && reimbursementExpenseSelect.value ? "" : "none";
+    }
 
     categoryMainInput.required = !isIncome;
     if (isIncome) {
@@ -49,6 +108,16 @@
       });
     } else {
       incomeSourceInput.value = "";
+      if (reimbursementExpenseSelect) {
+        reimbursementExpenseSelect.value = "";
+      }
+      if (reimbursementLinkAmountInput) {
+        reimbursementLinkAmountInput.value = "";
+      }
+    }
+
+    if (shouldShowReimbursementLink) {
+      refreshReimbursementOptions();
     }
   };
 
@@ -56,6 +125,7 @@
     panel.classList.add("is-open");
     panel.setAttribute("aria-hidden", "false");
     dateInput.value = isoDate;
+    refreshReimbursementOptions();
     setTimeout(() => {
       amountInput.focus();
     }, 30);
@@ -65,6 +135,18 @@
     panel.classList.remove("is-open");
     panel.setAttribute("aria-hidden", "true");
     setMessage("");
+  };
+
+  const formatReimbursementText = function (reimbursement) {
+    if (!reimbursement) {
+      return "-";
+    }
+    const statusMap = {
+      pending: "待报销",
+      partial: "部分报销",
+      completed: "已完成",
+    };
+    return `${statusMap[reimbursement.status] || reimbursement.status} · 已报销 ¥${Number(reimbursement.reimbursed_amount || 0).toFixed(2)} / ¥${Number(reimbursement.target_amount || 0).toFixed(2)}`;
   };
 
   const renderRecentRow = function (record) {
@@ -82,7 +164,8 @@
       }
     }
 
-    const tagsText = Array.isArray(record.tags) && record.tags.length > 0 ? record.tags.join("、") : "-";
+    const tagsText = Array.isArray(record.tags) && record.tags.length > 0 ? record.tags.join(" / ") : "-";
+    const reimbursementText = record.type === "expense" ? formatReimbursementText(record.reimbursement) : "-";
     const noteText = record.note || "-";
 
     return `<tr>
@@ -91,6 +174,7 @@
       <td class="${amountClass}">¥${amountText}</td>
       <td>${categoryText}</td>
       <td>${tagsText}</td>
+      <td>${reimbursementText}</td>
       <td>${noteText}</td>
     </tr>`;
   };
@@ -123,7 +207,7 @@
 
     const recentRows = sorted.slice(0, 10);
     if (recentRows.length === 0) {
-      recentBody.innerHTML = '<tr><td colspan="6">暂无记录，先记第一笔吧。</td></tr>';
+      recentBody.innerHTML = '<tr><td colspan="7">暂无记录，先记第一笔吧。</td></tr>';
       return;
     }
 
@@ -136,6 +220,16 @@
     button.addEventListener("click", openPanel);
   });
   typeInput.addEventListener("change", toggleFieldsByType);
+  incomeSourceInput.addEventListener("input", toggleFieldsByType);
+  if (reimbursableCheckbox) {
+    reimbursableCheckbox.addEventListener("change", toggleFieldsByType);
+  }
+  if (reimbursementExpenseSelect) {
+    reimbursementExpenseSelect.addEventListener("change", function () {
+      syncLinkAmountPlaceholder();
+      toggleFieldsByType();
+    });
+  }
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && panel.classList.contains("is-open")) {
@@ -157,10 +251,22 @@
 
     if (payload.type === "income") {
       payload.income_source = incomeSourceInput.value.trim();
+      if (isReimbursementIncome() && reimbursementExpenseSelect && reimbursementExpenseSelect.value) {
+        payload.reimbursement_expense_transaction_id = reimbursementExpenseSelect.value;
+        if (reimbursementLinkAmountInput && reimbursementLinkAmountInput.value) {
+          payload.reimbursement_link_amount = reimbursementLinkAmountInput.value;
+        }
+      }
     } else {
       payload.category_main = categoryMainInput.value;
       payload.category_sub = categorySubInput.value.trim();
       payload.tags = Array.from(tagsInput.selectedOptions).map((option) => option.value);
+      if (reimbursableCheckbox && reimbursableCheckbox.checked) {
+        payload.is_reimbursable = true;
+        if (reimbursementTargetInput && reimbursementTargetInput.value) {
+          payload.reimbursement_target_amount = reimbursementTargetInput.value;
+        }
+      }
     }
 
     try {
@@ -182,9 +288,10 @@
       typeInput.value = "expense";
       dateInput.value = isoDate;
       toggleFieldsByType();
+      syncLinkAmountPlaceholder();
       closePanel();
       await refreshHomeRecentRecords();
-    } catch (error) {
+    } catch (_error) {
       setMessage("网络异常，请稍后重试", true);
     } finally {
       submitButton.disabled = false;
@@ -192,4 +299,5 @@
   });
 
   toggleFieldsByType();
+  syncLinkAmountPlaceholder();
 })();

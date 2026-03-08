@@ -6,7 +6,7 @@
     <h2>快速记账</h2>
     <button type="button" class="fab-close" id="fab-close" aria-label="关闭">×</button>
   </div>
-  <div class="small" style="margin-bottom: 10px;">极简录入模式，优先填写金额与类型即可完成记账。</div>
+  <div class="small" style="margin-bottom: 10px;">保持原有录入方式不变，只有在需要报销追踪时才补充下面的关联字段。</div>
 
   <form id="fab-transaction-form" class="fab-form">
     <div>
@@ -47,10 +47,40 @@
       <div class="small" style="margin-top: 4px;">按住 Ctrl(Windows) 可多选</div>
     </div>
 
+    <div id="fab-expense-reimbursement-box">
+      <label class="small" style="display: flex; align-items: center; gap: 8px;">
+        <input id="fab-is-reimbursable" type="checkbox" name="is_reimbursable" value="1" />
+        <span>标记为待报销</span>
+      </label>
+      <div class="small" style="margin-top: 4px;">勾选后，该笔支出会进入报销追踪列表。</div>
+    </div>
+
+    <div id="fab-expense-reimbursement-amount" style="display: none;">
+      <label class="small" for="fab-reimbursement-target-amount">待报销金额</label>
+      <input id="fab-reimbursement-target-amount" type="number" step="0.01" min="0.01" name="reimbursement_target_amount" placeholder="默认等于支出金额" />
+    </div>
+
     <div id="fab-income-source" style="display: none;">
       <label class="small" for="fab-income-source-input">收入来源</label>
       <input id="fab-income-source-input" type="text" name="income_source" placeholder="如：工资 / 奖金 / 兼职 / 报销" />
-      <div class="small" style="margin-top: 4px;">报销到账请填写“报销”，系统将自动按报销口径处理。</div>
+      <div class="small" style="margin-top: 4px;">报销到账请填写“报销”，系统会开启关联支出选项。</div>
+    </div>
+
+    <div id="fab-income-reimbursement-link" style="display: none;">
+      <label class="small" for="fab-reimbursement-expense-select">关联待报销支出</label>
+      <select id="fab-reimbursement-expense-select" name="reimbursement_expense_transaction_id">
+        <option value="">不关联</option>
+        {% for expense in fab_open_reimbursement_expenses %}
+        <option value="{{ expense.id }}" data-pending-amount="{{ '%.2f'|format(expense.pending_amount) }}">
+          {{ expense.date }} · {{ expense.category_main }}{% if expense.category_sub %}/{{ expense.category_sub }}{% endif %} · 待报销 ¥{{ '%.2f'|format(expense.pending_amount) }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="fab-income-reimbursement-amount" style="display: none;">
+      <label class="small" for="fab-reimbursement-link-amount">本次关联金额</label>
+      <input id="fab-reimbursement-link-amount" type="number" step="0.01" min="0.01" name="reimbursement_link_amount" placeholder="默认等于本次报销收入" />
     </div>
 
     <div>
@@ -59,7 +89,7 @@
     </div>
 
     <div>
-      <label class="small" for="fab-date">??</label>
+      <label class="small" for="fab-date">日期</label>
       <input id="fab-date" type="date" name="date" value="{{ fab_today }}" />
     </div>
 

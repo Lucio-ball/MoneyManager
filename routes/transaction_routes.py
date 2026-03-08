@@ -2,6 +2,13 @@ from datetime import date, datetime
 
 from flask import Blueprint, jsonify, render_template, request
 
+from models.reimbursement import (
+    get_month_reimbursement_progress,
+    link_reimbursement_to_expense,
+    list_open_reimbursable_expenses,
+    mark_expense_as_reimbursable,
+    validate_reimbursement_link_amount,
+)
 from services.analysis_service import get_monthly_insights
 from services.budget_service import get_budget_execution, get_budget_health_profile
 from services.dashboard_service import get_home_risk_cards
@@ -15,9 +22,9 @@ from services.transaction_service import (
     get_calendar_daily_expense,
     get_calendar_day_details,
     create_transaction,
-    get_monthly_financial_summary,
     get_category_trend,
     get_monthly_dashboard_data,
+    get_monthly_financial_summary,
     get_monthly_stats,
     get_recent_transactions,
     get_tag_trend,
@@ -30,6 +37,10 @@ from utils.risk_utils import build_emotion_light
 bp = Blueprint("transaction_routes", __name__)
 
 
+def _parse_bool(value) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 @bp.route("/", endpoint="index")
 def index():
     category_palette = ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#EF4444"]
@@ -39,6 +50,8 @@ def index():
     financial_summary = get_monthly_financial_summary(month)
     budget_data = get_budget_execution(month)
     budget_health = get_budget_health_profile(month)
+    reimbursement_progress = get_month_reimbursement_progress(month)
+    open_reimbursement_expenses = list_open_reimbursable_expenses(limit=50)
 
     current_month = date.today().strftime("%Y-%m")
     today_expense = get_today_expense() if month == current_month else 0.0
@@ -79,6 +92,8 @@ def index():
         budget_health=budget_health,
         goal_summary=goal_summary,
         home_risk_cards=home_risk_cards,
+        reimbursement_progress=reimbursement_progress,
+        open_reimbursement_expenses=open_reimbursement_expenses,
     )
 
 
@@ -112,7 +127,48 @@ def create_transaction_api():
     if not transaction_data:
         return jsonify({"error": error or "invalid payload"}), 400
 
+    reimburse_expense_id = None
+    reimburse_link_amount = None
+
+    try:
+        if transaction_data["type"] == "income" and str(transaction_data.get("category_sub") or "").strip() == "报销":
+            expense_id_raw = payload.get("reimbursement_expense_transaction_id")
+            if expense_id_raw not in (None, ""):
+                reimburse_expense_id = int(expense_id_raw)
+                link_amount_raw = payload.get("reimbursement_link_amount")
+                if link_amount_raw not in (None, ""):
+                    reimburse_link_amount = float(link_amount_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid reimbursement link payload"}), 400
+
+    try:
+        if transaction_data["type"] == "expense" and _parse_bool(payload.get("is_reimbursable")):
+            target_amount_raw = payload.get("reimbursement_target_amount")
+            target_amount = float(target_amount_raw) if target_amount_raw not in (None, "") else float(transaction_data["amount"])
+            if target_amount <= 0:
+                raise ValueError("reimbursement amount must be greater than 0")
+            if target_amount - float(transaction_data["amount"]) > 0.005:
+                raise ValueError("reimbursement amount cannot exceed expense amount")
+
+        if reimburse_expense_id is not None:
+            validate_reimbursement_link_amount(
+                reimburse_expense_id,
+                float(transaction_data["amount"]),
+                reimburse_link_amount,
+            )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
+
     created_id = create_transaction(transaction_data)
+
+    if transaction_data["type"] == "expense" and _parse_bool(payload.get("is_reimbursable")):
+        target_amount_raw = payload.get("reimbursement_target_amount")
+        target_amount = float(target_amount_raw) if target_amount_raw not in (None, "") else float(transaction_data["amount"])
+        mark_expense_as_reimbursable(created_id, target_amount)
+
+    if reimburse_expense_id is not None:
+        link_reimbursement_to_expense(reimburse_expense_id, created_id, reimburse_link_amount)
+
     return jsonify({"id": created_id}), 201
 
 
@@ -120,6 +176,17 @@ def create_transaction_api():
 def list_transactions_api():
     month = request.args.get("month") or date.today().strftime("%Y-%m")
     return jsonify(get_transactions_by_month(month))
+
+
+@bp.route("/api/reimbursements/open-expenses", methods=["GET"], endpoint="open_reimbursable_expenses_api")
+def open_reimbursable_expenses_api():
+    return jsonify(list_open_reimbursable_expenses(limit=100))
+
+
+@bp.route("/api/reimbursements/progress", methods=["GET"], endpoint="reimbursement_progress_api")
+def reimbursement_progress_api():
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    return jsonify(get_month_reimbursement_progress(month))
 
 
 @bp.route("/api/stats/monthly", methods=["GET"], endpoint="monthly_stats_api")

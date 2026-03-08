@@ -95,6 +95,18 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS reimbursement_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                expense_transaction_id INTEGER NOT NULL,
+                reimbursement_transaction_id INTEGER,
+                amount REAL NOT NULL,
+                status TEXT CHECK(status IN ('pending', 'partial', 'completed')) NOT NULL DEFAULT 'pending',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS goals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -151,3 +163,4 @@ def init_db() -> None:
                 """
             )
         conn.commit()
+

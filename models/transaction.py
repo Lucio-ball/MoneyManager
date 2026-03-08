@@ -2,6 +2,7 @@ import json
 from datetime import date
 
 from extensions.database import get_connection
+from models.reimbursement import get_expense_reimbursement_map
 from utils.date_utils import month_sequence
 from utils.trend_utils import parse_tags
 
@@ -50,6 +51,19 @@ def create_transaction(transaction: dict) -> int:
         return int(last_row_id)
 
 
+def _attach_reimbursement_fields(records: list[dict]) -> list[dict]:
+    expense_ids = [int(item["id"]) for item in records if item.get("type") == "expense"]
+    reimbursement_map = get_expense_reimbursement_map(expense_ids)
+
+    for item in records:
+        if item.get("type") != "expense":
+            continue
+        reimbursement = reimbursement_map.get(int(item["id"]))
+        if reimbursement:
+            item["reimbursement"] = reimbursement
+    return records
+
+
 def get_recent_transactions(limit: int = 10) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
@@ -74,9 +88,10 @@ def get_recent_transactions(limit: int = 10) -> list[dict]:
     result = []
     for row in rows:
         item = dict(row)
+        item["amount"] = float(item["amount"])
         item["tags"] = parse_tags(item.get("tags"))
         result.append(item)
-    return result
+    return _attach_reimbursement_fields(result)
 
 
 def get_monthly_financial_summary(month: str) -> dict:
@@ -182,7 +197,7 @@ def get_transactions_by_month(month: str) -> list[dict]:
         item["amount"] = float(item["amount"])
         item["tags"] = parse_tags(item.get("tags"))
         records.append(item)
-    return records
+    return _attach_reimbursement_fields(records)
 
 
 def get_monthly_stats(month: str) -> dict:
@@ -201,7 +216,7 @@ def get_monthly_stats(month: str) -> dict:
 
         amount = float(record["amount"])
         day = record["date"]
-        category = record["category_main"] or "其他"
+        category = record["category_main"] or "鍏朵粬"
 
         daily_map[day] = round(daily_map.get(day, 0) + amount, 2)
         category_map[category] = round(category_map.get(category, 0) + amount, 2)
@@ -471,3 +486,5 @@ def get_calendar_day_details(target_date: str) -> dict:
         "expense_count": len(transactions),
         "transactions": transactions,
     }
+
+

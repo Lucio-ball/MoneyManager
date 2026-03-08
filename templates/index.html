@@ -67,6 +67,12 @@
             <div class="kpi-value expense mono">¥{{ '%.2f'|format(today_expense) }}</div>
           </article>
           <article class="kpi-card">
+            <div class="kpi-label">报销进度</div>
+            <div class="kpi-value mono">{{ '%.2f'|format(reimbursement_progress.completion_rate or 0) }}%</div>
+            <div class="small">待报销：¥{{ '%.2f'|format(reimbursement_progress.pending_amount or 0) }}</div>
+            <div class="small">已报销：¥{{ '%.2f'|format(reimbursement_progress.reimbursed_amount or 0) }} / ¥{{ '%.2f'|format(reimbursement_progress.tracked_amount or 0) }}</div>
+          </article>
+          <article class="kpi-card">
             <div class="kpi-label">预算健康度</div>
             <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.value) }}</div>
             <div class="small">{{ budget_health.score.level }} · 执行率 {{ '%.2f'|format(budget_health.score.execution_rate) }}%</div>
@@ -235,6 +241,7 @@
                       <th>金额</th>
                       <th>类别</th>
                       <th>标签</th>
+                      <th>Reimb.</th>
                       <th>备注</th>
                     </tr>
                   </thead>
@@ -249,11 +256,17 @@
                         row.category_main }}{% if row.category_sub %} / {{ row.category_sub }}{% endif %} {% endif %}
                       </td>
                       <td>{{ row.tags | join('、') if row.tags else '-' }}</td>
+                      <td>
+                        {% if row.type == 'expense' and row.reimbursement %}
+                        {{ {'pending': '待报销', 'partial': '部分报销', 'completed': '已完成'}.get(row.reimbursement.status, row.reimbursement.status) }} ·
+                        ¥{{ '%.2f'|format(row.reimbursement.reimbursed_amount or 0) }} / ¥{{ '%.2f'|format(row.reimbursement.target_amount or 0) }}
+                        {% else %}-{% endif %}
+                      </td>
                       <td>{{ row.note if row.note else '-' }}</td>
                     </tr>
                     {% endfor %} {% else %}
                     <tr>
-                      <td colspan="6">暂无记录，先记第一笔吧。</td>
+                      <td colspan="7">暂无记录，先记第一笔吧。</td>
                     </tr>
                     {% endif %}
                   </tbody>

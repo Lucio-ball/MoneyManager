@@ -4,6 +4,7 @@ from flask import Flask
 
 from config import CATEGORY_OPTIONS, TAG_OPTIONS
 from extensions.database import init_db
+from models.reimbursement import list_open_reimbursable_expenses
 from routes.ai_routes import bp as ai_bp
 from routes.analysis_routes import bp as analysis_bp
 from routes.budget_routes import bp as budget_bp
@@ -24,6 +25,7 @@ def create_app() -> Flask:
             "fab_category_options": CATEGORY_OPTIONS,
             "fab_tag_options": TAG_OPTIONS,
             "fab_today": date.today().isoformat(),
+            "fab_open_reimbursement_expenses": list_open_reimbursable_expenses(limit=50),
         }
 
     @app.before_request
