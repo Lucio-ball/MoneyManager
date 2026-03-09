@@ -186,8 +186,9 @@
       return;
     }
 
-    const monthInput = document.querySelector('form.toolbar input[name="month"]');
-    const month = monthInput && monthInput.value ? monthInput.value : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const month =
+      (window.MMMonthState && window.MMMonthState.getMonth && window.MMMonthState.getMonth()) ||
+      `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 
     const response = await fetch(`/api/transactions?month=${encodeURIComponent(month)}`);
     if (!response.ok) {

@@ -51,6 +51,11 @@
     return `${yyyyMm}-${String(day).padStart(2, "0")}`;
   }
 
+  function currentIsoDate() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
+
   function buildMarkerHtml(markers) {
     const markerKeys = Object.keys(markerMeta).filter((key) => markers && markers[key]);
     if (markerKeys.length === 0) {
@@ -184,9 +189,10 @@
       const amount = Number(dayInfo.total_expense || 0);
       const heatLevel = getHeatLevel(amount, maxExpense);
       const markers = dayInfo.markers || {};
+      const stateClass = `${dateStr === currentIsoDate() ? " is-today" : ""}${heatLevel >= 5 ? " is-peak" : ""}`;
 
       cells.push(`
-        <div class="calendar-day-cell calendar-heat-${heatLevel}">
+        <div class="calendar-day-cell calendar-heat-${heatLevel}${stateClass}">
           <button type="button" class="calendar-day-btn" data-date="${dateStr}">${day}</button>
           <div class="calendar-day-amount">¥${amount.toFixed(2)}</div>
           ${buildMarkerHtml(markers)}

@@ -1,112 +1,108 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MoneyManager · 目标管理</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
-  </head>
-  <body>
-    <header class="top-nav app-shell">
-      <div class="top-nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-dot"></span>
-          <span>MoneyManager</span>
-        </a>
-        <nav class="nav-links">
-          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
-          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
-          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
-          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
-          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
-          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
-        </nav>
-        <div class="nav-actions">
-          {% include '_global_month_selector.html' %}
-          <button class="btn js-fab-open" type="button">记账</button>
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · 财务目标{% endblock %}
+
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="page-eyebrow">Goals</div>
+    <h1 class="page-title">财务目标追踪</h1>
+    <div class="page-subtitle">把储蓄目标变成清晰的进度卡片，持续跟踪每月应存金额、当前完成度和状态。</div>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if success == '1' %}
+<section class="panel"><p class="msg ok">目标已创建。</p></section>
+{% elif success == '0' %}
+<section class="panel"><p class="msg danger">创建失败：{{ error or '请检查输入内容。' }}</p></section>
+{% endif %}
+
+<section class="form-shell">
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">创建目标</h2>
+        <div class="section-desc">设置名称、金额和截止日，系统会自动计算应有进度。</div>
+      </div>
+    </div>
+    <form method="post" action="/goals" class="form-grid" style="margin-top: 18px;">
+      <input type="hidden" name="month" value="{{ month }}" />
+      <div class="grid-2">
+        <div class="field-group">
+          <label class="field-label">目标名称</label>
+          <input type="text" name="name" placeholder="如：3个月攒3000买 iPad" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label">目标金额</label>
+          <input type="number" step="0.01" min="0.01" name="target_amount" placeholder="请输入目标金额" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label">截止日期</label>
+          <input type="date" name="deadline" min="{{ today }}" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label">备注</label>
+          <input type="text" name="note" placeholder="可选备注" />
         </div>
       </div>
-    </header>
-
-    <main class="app-shell">
-      <div class="page">
-        <section class="panel">
-          {% set goals_month = month %}
-          <h1 class="page-title">目标管理（Goal Tracking）</h1>
-          <div class="page-subtitle">当前月份：{{ goals_month[:4] }}年{{ goals_month[5:7] }}月</div>
-          <div class="section-insight">设置存钱目标并追踪进度，系统会自动计算每月应存金额与进度是否落后。</div>
-        </section>
-
-        <section class="panel">
-          {% if success == '1' %}
-          <div class="msg ok">目标已创建。</div>
-          {% elif success == '0' %}
-          <div class="msg danger">创建失败：{{ error or '请检查输入内容。' }}</div>
-          {% endif %}
-
-          <form method="post" action="/goals" class="form-grid form-grid-4">
-            <input type="hidden" name="month" value="{{ month }}" />
-            <input type="text" name="name" placeholder="目标名称，如：3个月攒3000买iPad" required />
-            <input type="number" step="0.01" min="0.01" name="target_amount" placeholder="目标金额" required />
-            <input type="date" name="deadline" min="{{ today }}" required />
-            <button class="btn" type="submit">创建目标</button>
-            <input type="text" name="note" placeholder="备注（可选）" style="grid-column: 1 / -1;" />
-          </form>
-        </section>
-
-        <section class="panel">
-          <h2 class="section-title">目标列表</h2>
-          {% if goals %}
-          <div class="table-wrap" style="margin-top: 10px;">
-            <table>
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th>目标金额</th>
-                  <th>当前进度</th>
-                  <th>每月需存</th>
-                  <th>截止日期</th>
-                  <th>状态</th>
-                  <th>备注</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in goals %}
-                <tr>
-                  <td>{{ item.name }}</td>
-                  <td class="mono">¥{{ '%.2f'|format(item.target_amount) }}</td>
-                  <td>
-                    <div class="mono">¥{{ '%.2f'|format(item.current_saved) }}（{{ '%.2f'|format(item.progress_rate) }}%）</div>
-                    <div class="small">预期 {{ '%.2f'|format(item.expected_progress_rate) }}%</div>
-                  </td>
-                  <td class="mono">¥{{ '%.2f'|format(item.monthly_required) }}</td>
-                  <td>{{ item.deadline }}</td>
-                  <td>
-                    {% if item.is_completed %}
-                    <span class="badge ok">已完成</span>
-                    {% elif item.is_overdue %}
-                    <span class="badge danger">已逾期</span>
-                    {% elif item.is_behind %}
-                    <span class="badge warn">已落后</span>
-                    {% else %}
-                    <span class="badge ok">进行中</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ item.note if item.note else '-' }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% else %}
-          <div class="helper-text">暂无目标，先创建一个吧。</div>
-          {% endif %}
-        </section>
+      <div class="toolbar">
+        <button class="btn" type="submit">创建目标</button>
       </div>
-    </main>
-    {% include '_fab_transaction.html' %}
-    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
-  </body>
-</html>
+    </form>
+  </article>
+
+  <article class="panel form-side-note">
+    <div class="summary-tile">
+      <div class="summary-tile-label">目标数量</div>
+      <div class="summary-tile-value mono">{{ goals|length }}</div>
+    </div>
+    <div class="section-insight">目标越清晰，月度复盘就越容易形成可执行动作。建议保持少量高优先级目标，而不是堆积过多愿望清单。</div>
+  </article>
+</section>
+
+<section class="goal-grid">
+  {% if goals %}
+    {% for item in goals %}
+    <article class="goal-card">
+      <div class="goal-card-head">
+        <div>
+          <div class="goal-name">{{ item.name }}</div>
+          <div class="small">截止 {{ item.deadline }}</div>
+        </div>
+        <div>
+          {% if item.is_completed %}
+          <span class="badge ok">已完成</span>
+          {% elif item.is_overdue %}
+          <span class="badge danger">已逾期</span>
+          {% elif item.is_behind %}
+          <span class="badge warn">已落后</span>
+          {% else %}
+          <span class="badge ok">进行中</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="goal-progress">
+        <div class="goal-progress-row">
+          <span>当前进度</span>
+          <span class="mono">{{ '%.2f'|format(item.progress_rate) }}%</span>
+        </div>
+        <div class="progress"><span style="width: {{ 100 if item.progress_rate > 100 else item.progress_rate }}%;"></span></div>
+        <div class="small">预期 {{ '%.2f'|format(item.expected_progress_rate) }}%</div>
+      </div>
+      <div class="goal-meta">
+        <div>目标金额 <strong class="mono">¥{{ '%.2f'|format(item.target_amount) }}</strong></div>
+        <div>当前已存 <strong class="mono">¥{{ '%.2f'|format(item.current_saved) }}</strong></div>
+        <div>每月需存 <strong class="mono">¥{{ '%.2f'|format(item.monthly_required) }}</strong></div>
+        <div>备注 <strong>{{ item.note if item.note else '-' }}</strong></div>
+      </div>
+    </article>
+    {% endfor %}
+  {% else %}
+  <article class="panel">
+    <div class="helper-text">暂无目标，先创建一个吧。</div>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

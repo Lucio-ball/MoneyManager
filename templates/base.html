@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}MoneyManager{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="{% block body_class %}{% endblock %}">
+    <header class="top-nav">
+      <div class="top-nav-inner app-shell">
+        <a class="brand" href="/">
+          <span class="brand-mark">
+            <span class="brand-mark-dot"></span>
+          </span>
+          <span class="brand-copy">
+            <strong>MoneyManager</strong>
+            <span>Personal Finance OS</span>
+          </span>
+        </a>
+        <nav class="nav-links">
+          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
+          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
+          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
+          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
+          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
+          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
+          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai/monthly-review">AI 复盘</a>
+        </nav>
+        <div class="nav-actions">
+          {% include '_global_month_selector.html' %}
+          {% block nav_actions %}
+          <button class="btn js-fab-open" type="button">快速记账</button>
+          {% endblock %}
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell app-main">
+      <div class="page">
+        {% block page_header %}{% endblock %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+    {% block page_overlay %}
+    {% include '_fab_transaction.html' %}
+    {% endblock %}
+
+    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
+    {% block base_scripts %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

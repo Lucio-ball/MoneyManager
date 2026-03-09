@@ -1,266 +1,172 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MoneyManager - AI 月度复盘</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
-  </head>
-  <body>
-    <header class="top-nav app-shell">
-      <div class="top-nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-dot"></span>
-          <span>MoneyManager</span>
-        </a>
-        <nav class="nav-links">
-          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
-          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
-          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
-          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
-          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
-          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai/monthly-review">AI 复盘</a>
-        </nav>
-        <div class="nav-actions">
-          {% include '_global_month_selector.html' %}
-          <button class="btn js-fab-open" type="button">记账</button>
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · AI 月度复盘{% endblock %}
+
+{% block page_header %}
+{% set summary = review.summary %}
+{% set kpi = review.kpi %}
+{% set structure = review.structure_analysis %}
+{% set behavior = review.behavior_analysis %}
+{% set risk = review.risk_analysis %}
+{% set budget = review.budget_analysis %}
+{% set subscription = review.subscription_analysis %}
+{% set reimbursement = review.reimbursement_analysis %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="review-chip">AI Monthly Review</div>
+    <h1 class="page-title">AI 月度复盘</h1>
+    <div class="page-subtitle">{{ summary.overview }}</div>
+  </div>
+  <div class="page-header-actions">
+    <div class="summary-tile" style="min-width: 220px;">
+      <div class="summary-tile-label">本月结余</div>
+      <div class="summary-tile-value {{ 'is-success' if kpi.balance >= 0 else 'is-danger' }} mono">¥{{ '%.2f'|format(kpi.balance) }}</div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% set summary = review.summary %}
+{% set kpi = review.kpi %}
+{% set structure = review.structure_analysis %}
+{% set behavior = review.behavior_analysis %}
+{% set risk = review.risk_analysis %}
+{% set budget = review.budget_analysis %}
+{% set subscription = review.subscription_analysis %}
+{% set reimbursement = review.reimbursement_analysis %}
+
+<section class="panel review-hero">
+  <div class="review-pill-row">
+    {% for item in summary.highlights %}
+    <div class="review-pill">{{ item }}</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="kpi-grid">
+  <article class="kpi-card">
+    <div class="kpi-label">收入</div>
+    <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.gross_income) }}</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">支出</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.gross_expense) }}</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">净支出</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.net_expense) }}</div>
+    <div class="small">净支出 = 支出 - 报销</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">真实收入</div>
+    <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.real_income) }}</div>
+    <div class="small">真实收入 = 收入 - 报销</div>
+  </article>
+</section>
+
+<section class="review-grid">
+  <article class="review-card review-card-wide">
+    <h2 class="section-title">本月总结</h2>
+    <div class="review-note-list" style="margin-top: 18px;">
+      <div class="review-note">{{ summary.overview }}</div>
+    </div>
+  </article>
+
+  <article class="review-card">
+    <h2 class="section-title">消费结构</h2>
+    <div class="category-list" style="margin-top: 18px;">
+      {% for item in structure.top_categories %}
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">{{ item.name }}</div>
+          <div class="progress"><span style="width: {{ item.ratio }}%;"></span></div>
         </div>
+        <div class="mono">¥{{ '%.2f'|format(item.amount) }}</div>
       </div>
-    </header>
+      {% endfor %}
+    </div>
+  </article>
 
-    {% set summary = review.summary %}
-    {% set kpi = review.kpi %}
-    {% set structure = review.structure_analysis %}
-    {% set behavior = review.behavior_analysis %}
-    {% set risk = review.risk_analysis %}
-    {% set budget = review.budget_analysis %}
-    {% set subscription = review.subscription_analysis %}
-    {% set reimbursement = review.reimbursement_analysis %}
+  <article class="review-card">
+    <h2 class="section-title">行为画像</h2>
+    <div class="review-identity" style="margin-top: 18px;">{{ behavior.label }}</div>
+    <div class="helper-text">{{ behavior.description }}</div>
+    <div class="review-note-list" style="margin-top: 18px;">
+      {% for item in behavior.habits %}
+      <div class="review-note">{{ item }}</div>
+      {% endfor %}
+    </div>
+  </article>
 
-    <main class="app-shell">
-      <div class="page">
-        <section class="panel review-hero">
-          <div class="review-hero-top">
-            <div>
-              <div class="review-chip">AI Monthly Review</div>
-              <h1 class="page-title">AI 月度复盘</h1>
-              <div class="page-subtitle">当前月份：{{ month }}</div>
-            </div>
-            <div class="review-hero-metric">
-              <div class="review-hero-label">本月结余</div>
-              <div class="review-hero-value {{ 'income' if kpi.balance >= 0 else 'expense' }}">¥{{ '%.2f'|format(kpi.balance) }}</div>
-            </div>
-          </div>
-          <div class="section-insight">{{ summary.overview }}</div>
-          <div class="review-pill-row">
-            {% for item in summary.highlights %}
-            <div class="review-pill">{{ item }}</div>
-            {% endfor %}
-          </div>
-        </section>
-
-        <section class="kpi-grid">
-          <article class="kpi-card">
-            <div class="kpi-label">收入</div>
-            <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.gross_income) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">支出</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.gross_expense) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">净支出</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(kpi.net_expense) }}</div>
-            <div class="small">净支出 = 支出 - 报销</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">真实收入</div>
-            <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.real_income) }}</div>
-            <div class="small">真实收入 = 收入 - 报销</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">报销</div>
-            <div class="kpi-value income mono">¥{{ '%.2f'|format(kpi.reimbursement_income) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">结余</div>
-            <div class="kpi-value {{ 'income' if kpi.balance >= 0 else 'expense' }} mono">¥{{ '%.2f'|format(kpi.balance) }}</div>
-          </article>
-        </section>
-
-        <section class="review-grid">
-          <article class="panel review-card review-card-wide">
-            <div class="section-head">
-              <div>
-                <h2 class="section-title">消费结构分析</h2>
-                <div class="section-desc">{{ structure.overview }}</div>
-              </div>
-            </div>
-            <div class="review-split">
-              <div class="category-list">
-                {% for item in structure.top_categories %}
-                <div class="category-item">
-                  <div class="category-main">
-                    <div class="category-name">{{ item.name }}</div>
-                    <div class="progress"><span style="width: {{ item.ratio }}%;"></span></div>
-                  </div>
-                  <div class="mono">
-                    <div>¥{{ '%.2f'|format(item.amount) }}</div>
-                    <div class="small">{{ '%.2f'|format(item.ratio) }}%</div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-              <div class="review-note-list">
-                {% for item in structure.insights %}
-                <div class="review-note">{{ item }}</div>
-                {% endfor %}
-                {% for item in structure.top_tags %}
-                <div class="review-note">标签 {{ item.name }}：¥{{ '%.2f'|format(item.amount) }} / {{ '%.2f'|format(item.ratio) }}%</div>
-                {% endfor %}
-              </div>
-            </div>
-          </article>
-
-          <article class="panel review-card">
-            <h2 class="section-title">消费行为画像</h2>
-            <div class="review-identity">{{ behavior.label }}</div>
-            <div class="helper-text">{{ behavior.description }}</div>
-            <div class="review-note-list">
-              {% for item in behavior.habits %}
-              <div class="review-note">{{ item }}</div>
-              {% endfor %}
-            </div>
-            {% if behavior.reasons %}
-            <div class="review-list-title">判断依据</div>
-            <div class="review-bullet-list">
-              {% for item in behavior.reasons %}
-              <div class="review-bullet">{{ item }}</div>
-              {% endfor %}
-            </div>
-            {% endif %}
-          </article>
-
-          <article class="panel review-card">
-            <h2 class="section-title">风险识别</h2>
-            <div class="review-score-row">
-              <div>
-                <div class="review-mini-label">风险等级</div>
-                <div class="review-score">{{ risk.level }}</div>
-              </div>
-              <div>
-                <div class="review-mini-label">风险分数</div>
-                <div class="review-score mono">{{ '%.2f'|format(risk.score) }}</div>
-              </div>
-            </div>
-            <div class="review-bullet-list">
-              {% for item in risk["items"] %}
-              <div class="review-risk-item {{ item.level }}">
-                <div class="review-risk-title">{{ item.title }}</div>
-                <div class="small">{{ item.detail }}</div>
-              </div>
-              {% endfor %}
-            </div>
-          </article>
-
-          <article class="panel review-card">
-            <h2 class="section-title">预算执行情况</h2>
-            <div class="helper-text">{{ budget.overview }}</div>
-            <div class="review-score-row">
-              <div>
-                <div class="review-mini-label">预算健康度</div>
-                <div class="review-score">{{ budget.score.level if budget.score else '--' }}</div>
-              </div>
-              <div>
-                <div class="review-mini-label">执行率</div>
-                <div class="review-score mono">{{ '%.2f'|format((budget.score.execution_rate if budget.score else 0) or 0) }}%</div>
-              </div>
-            </div>
-            <div class="review-list-title">超支项</div>
-            <div class="review-bullet-list">
-              {% if budget["overspending"] %}
-                {% for item in budget["overspending"] %}
-                <div class="review-bullet">{{ item.category_main }}：{{ '%.2f'|format(item.execution_rate) }}%</div>
-                {% endfor %}
-              {% else %}
-                <div class="review-bullet">本月暂无分类超支。</div>
-              {% endif %}
-            </div>
-            <div class="review-list-title">提醒</div>
-            <div class="review-bullet-list">
-              {% if budget["hints"] %}
-                {% for item in budget["hints"] %}
-                <div class="review-bullet">{{ item }}</div>
-                {% endfor %}
-              {% else %}
-                <div class="review-bullet">本月预算执行相对平稳。</div>
-              {% endif %}
-            </div>
-          </article>
-
-          <article class="panel review-card">
-            <h2 class="section-title">订阅压力分析</h2>
-            <div class="helper-text">{{ subscription.overview }}</div>
-            <div class="review-score-row">
-              <div>
-                <div class="review-mini-label">压力等级</div>
-                <div class="review-score">{{ subscription.pressure_level }}</div>
-              </div>
-              <div>
-                <div class="review-mini-label">实际扣费</div>
-                <div class="review-score mono">¥{{ '%.2f'|format(subscription.actual_charged_amount) }}</div>
-              </div>
-            </div>
-            <div class="review-list-title">高成本订阅</div>
-            <div class="review-bullet-list">
-              {% if subscription.top_subscriptions %}
-                {% for item in subscription.top_subscriptions %}
-                <div class="review-bullet">{{ item.name }}：¥{{ '%.2f'|format(item.monthly_cost) }}/月</div>
-                {% endfor %}
-              {% else %}
-                <div class="review-bullet">暂无订阅成本数据。</div>
-              {% endif %}
-            </div>
-          </article>
-
-          <article class="panel review-card">
-            <h2 class="section-title">报销分析</h2>
-            <div class="helper-text">{{ reimbursement.overview }}</div>
-            <div class="review-score-row">
-              <div>
-                <div class="review-mini-label">追踪笔数</div>
-                <div class="review-score mono">{{ reimbursement.tracked_count }}</div>
-              </div>
-              <div>
-                <div class="review-mini-label">完成率</div>
-                <div class="review-score mono">{{ '%.2f'|format(reimbursement.completion_rate) }}%</div>
-              </div>
-            </div>
-            <div class="review-list-title">待报销压力</div>
-            <div class="review-bullet-list">
-              <div class="review-bullet">待回收金额：¥{{ '%.2f'|format(reimbursement.pending_amount) }}</div>
-              <div class="review-bullet">待处理笔数：{{ reimbursement.pending_count }}</div>
-              {% for category, amount in reimbursement.category_pending_amount.items() %}
-              <div class="review-bullet">{{ category }}：¥{{ '%.2f'|format(amount) }}</div>
-              {% endfor %}
-            </div>
-          </article>
-
-          <article class="panel review-card review-card-wide">
-            <h2 class="section-title">下月建议</h2>
-            <div class="review-suggestion-grid">
-              {% for item in review.next_month_suggestions %}
-              <div class="review-suggestion">{{ loop.index }}. {{ item }}</div>
-              {% endfor %}
-            </div>
-          </article>
-        </section>
+  <article class="review-card">
+    <h2 class="section-title">风险识别</h2>
+    <div class="review-score-row" style="margin-top: 18px;">
+      <div>
+        <div class="review-mini-label">风险等级</div>
+        <div class="review-score">{{ risk.level }}</div>
       </div>
-    </main>
+      <div>
+        <div class="review-mini-label">风险分数</div>
+        <div class="review-score mono">{{ '%.2f'|format(risk.score) }}</div>
+      </div>
+    </div>
+    <div class="review-bullet-list" style="margin-top: 18px;">
+      {% for item in risk["items"] %}
+      <div class="review-risk-item {{ item.level }}">
+        <div class="review-risk-title">{{ item.title }}</div>
+        <div class="small">{{ item.detail }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
 
-    {% include '_fab_transaction.html' %}
-    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
-  </body>
-</html>
+  <article class="review-card">
+    <h2 class="section-title">预算执行</h2>
+    <div class="review-note-list" style="margin-top: 18px;">
+      <div class="review-note">{{ budget.overview }}</div>
+      <div class="review-note">预算健康度 {{ budget.score.level if budget.score else '--' }}，执行率 {{ '%.2f'|format((budget.score.execution_rate if budget.score else 0) or 0) }}%。</div>
+      <div class="review-note">
+        {% if budget["hints"] %}
+          {{ budget["hints"] | join(' ') }}
+        {% else %}
+          本月预算执行相对平稳。
+        {% endif %}
+      </div>
+    </div>
+  </article>
+
+  <article class="review-card">
+    <h2 class="section-title">订阅压力</h2>
+    <div class="review-note-list" style="margin-top: 18px;">
+      <div class="review-note">{{ subscription.overview }}</div>
+      <div class="review-note">压力等级 {{ subscription.pressure_level }}，实际扣费 ¥{{ '%.2f'|format(subscription.actual_charged_amount) }}。</div>
+      <div class="review-note">
+        {% if subscription.top_subscriptions %}
+        最高成本订阅：{{ subscription.top_subscriptions[0].name }} · ¥{{ '%.2f'|format(subscription.top_subscriptions[0].monthly_cost) }}/月。
+        {% else %}
+        暂无订阅成本数据。
+        {% endif %}
+      </div>
+    </div>
+  </article>
+
+  <article class="review-card">
+    <h2 class="section-title">报销分析</h2>
+    <div class="review-note-list" style="margin-top: 18px;">
+      <div class="review-note">{{ reimbursement.overview }}</div>
+      <div class="review-note">追踪笔数 {{ reimbursement.tracked_count }}，完成率 {{ '%.2f'|format(reimbursement.completion_rate) }}%。</div>
+      <div class="review-note">待回收金额 ¥{{ '%.2f'|format(reimbursement.pending_amount) }}，待处理 {{ reimbursement.pending_count }} 笔。</div>
+    </div>
+  </article>
+
+  <article class="review-card review-card-wide">
+    <h2 class="section-title">下月建议</h2>
+    <div class="review-suggestion-grid" style="margin-top: 18px;">
+      {% for item in review.next_month_suggestions %}
+      <div class="review-suggestion">{{ loop.index }}. {{ item }}</div>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

@@ -8,7 +8,7 @@ const consumptionHealth = analysisData.consumption_health || {};
 const riskRadar = analysisData.risk_radar || (analysisData.risks || {}).risk_radar || {};
 
 const chartTheme = window.MMChartTheme || {
-  palette: ["#2563EB", "#0EA5E9", "#14B8A6", "#22C55E", "#F59E0B", "#EF4444", "#64748B", "#8B5CF6"],
+  palette: ["#4F46E5", "#0F766E", "#10B981", "#F59E0B", "#EF4444", "#64748B", "#6366F1", "#1D4ED8"],
   lineOptions() {
     return {
       responsive: true,
@@ -31,9 +31,27 @@ const chartTheme = window.MMChartTheme || {
       },
     };
   },
+  radarOptions() {
+    return {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: "#475569", boxWidth: 10, usePointStyle: true, pointStyle: "circle" } },
+      },
+      scales: {
+        r: {
+          suggestedMin: 0,
+          suggestedMax: 100,
+          grid: { color: "rgba(100, 116, 139, 0.2)" },
+          angleLines: { color: "rgba(100, 116, 139, 0.2)" },
+          pointLabels: { color: "#475569", font: { size: 12 } },
+          ticks: { color: "#64748B", backdropColor: "transparent", stepSize: 20 },
+        },
+      },
+    };
+  },
   alpha(color, alpha) {
     const value = String(color || "").replace("#", "");
-    if (value.length !== 6) return "rgba(37, 99, 235, 0.16)";
+    if (value.length !== 6) return "rgba(79, 70, 229, 0.16)";
     const r = parseInt(value.slice(0, 2), 16);
     const g = parseInt(value.slice(2, 4), 16);
     const b = parseInt(value.slice(4, 6), 16);
@@ -55,8 +73,9 @@ function buildPalette(size) {
 }
 
 const healthDimensions = consumptionHealth.dimensions || [];
-if (healthDimensions.length > 0) {
-  new Chart(document.getElementById("consumptionHealthRadarChart"), {
+const consumptionHealthCanvas = document.getElementById("consumptionHealthRadarChart");
+if (healthDimensions.length > 0 && consumptionHealthCanvas) {
+  new Chart(consumptionHealthCanvas, {
     type: "radar",
     data: {
       labels: healthDimensions.map((item) => item.label),
@@ -72,30 +91,14 @@ if (healthDimensions.length > 0) {
         },
       ],
     },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: {
-          labels: { color: "#475569", boxWidth: 10, usePointStyle: true, pointStyle: "circle" },
-        },
-      },
-      scales: {
-        r: {
-          suggestedMin: 0,
-          suggestedMax: 100,
-          grid: { color: "rgba(100, 116, 139, 0.2)" },
-          angleLines: { color: "rgba(100, 116, 139, 0.2)" },
-          pointLabels: { color: "#475569", font: { size: 12 } },
-          ticks: { color: "#64748B", backdropColor: "transparent", stepSize: 20 },
-        },
-      },
-    },
+    options: chartTheme.radarOptions(),
   });
 }
 
 const riskDimensions = riskRadar.dimensions || [];
-if (riskDimensions.length > 0) {
-  new Chart(document.getElementById("riskRadarChart"), {
+const riskRadarCanvas = document.getElementById("riskRadarChart");
+if (riskDimensions.length > 0 && riskRadarCanvas) {
+  new Chart(riskRadarCanvas, {
     type: "radar",
     data: {
       labels: riskDimensions.map((item) => item.label),
@@ -111,30 +114,14 @@ if (riskDimensions.length > 0) {
         },
       ],
     },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: {
-          labels: { color: "#475569", boxWidth: 10, usePointStyle: true, pointStyle: "circle" },
-        },
-      },
-      scales: {
-        r: {
-          suggestedMin: 0,
-          suggestedMax: 100,
-          grid: { color: "rgba(100, 116, 139, 0.2)" },
-          angleLines: { color: "rgba(100, 116, 139, 0.2)" },
-          pointLabels: { color: "#475569", font: { size: 12 } },
-          ticks: { color: "#64748B", backdropColor: "transparent", stepSize: 20 },
-        },
-      },
-    },
+    options: chartTheme.radarOptions(),
   });
 }
 
 const categoryStats = structure.category_stats || [];
-if (categoryStats.length > 0) {
-  new Chart(document.getElementById("categoryStructureChart"), {
+const categoryStructureCanvas = document.getElementById("categoryStructureChart");
+if (categoryStats.length > 0 && categoryStructureCanvas) {
+  new Chart(categoryStructureCanvas, {
     type: "pie",
     data: {
       labels: categoryStats.map((item) => item.name),
@@ -151,8 +138,9 @@ if (categoryStats.length > 0) {
 }
 
 const dailyExpense = rhythm.daily_expense || [];
-if (dailyExpense.length > 0) {
-  new Chart(document.getElementById("dailyRhythmChart"), {
+const dailyRhythmCanvas = document.getElementById("dailyRhythmChart");
+if (dailyExpense.length > 0 && dailyRhythmCanvas) {
+  new Chart(dailyRhythmCanvas, {
     type: "line",
     data: {
       labels: dailyExpense.map((item) => item.date),
@@ -175,9 +163,10 @@ if (dailyExpense.length > 0) {
 }
 
 const categoryTrend = trends.category_trend || { months: [], series: [] };
-if ((categoryTrend.series || []).length > 0) {
+const categoryTrendCanvas = document.getElementById("categoryTrendChart");
+if ((categoryTrend.series || []).length > 0 && categoryTrendCanvas) {
   const categoryPalette = buildPalette(categoryTrend.series.length);
-  new Chart(document.getElementById("categoryTrendChart"), {
+  new Chart(categoryTrendCanvas, {
     type: "line",
     data: {
       labels: categoryTrend.months || [],
@@ -195,9 +184,10 @@ if ((categoryTrend.series || []).length > 0) {
 }
 
 const tagTrend = trends.tag_trend || { months: [], series: [] };
-if ((tagTrend.series || []).length > 0) {
+const tagTrendCanvas = document.getElementById("tagTrendChart");
+if ((tagTrend.series || []).length > 0 && tagTrendCanvas) {
   const tagPalette = ["#EF4444", "#22C55E", "#0EA5E9", "#F59E0B"];
-  new Chart(document.getElementById("tagTrendChart"), {
+  new Chart(tagTrendCanvas, {
     type: "line",
     data: {
       labels: tagTrend.months || [],
@@ -215,8 +205,9 @@ if ((tagTrend.series || []).length > 0) {
 }
 
 const totalExpenseTrend = trends.total_expense_trend || [];
-if (totalExpenseTrend.length > 0) {
-  new Chart(document.getElementById("totalExpenseTrendChart"), {
+const totalExpenseTrendCanvas = document.getElementById("totalExpenseTrendChart");
+if (totalExpenseTrend.length > 0 && totalExpenseTrendCanvas) {
+  new Chart(totalExpenseTrendCanvas, {
     type: "bar",
     data: {
       labels: totalExpenseTrend.map((item) => item.month),
@@ -234,8 +225,9 @@ if (totalExpenseTrend.length > 0) {
 }
 
 const subscriptionTrend = trends.subscription_cost_trend || [];
-if (subscriptionTrend.length > 0) {
-  new Chart(document.getElementById("subscriptionTrendChart"), {
+const subscriptionTrendCanvas = document.getElementById("subscriptionTrendChart");
+if (subscriptionTrend.length > 0 && subscriptionTrendCanvas) {
+  new Chart(subscriptionTrendCanvas, {
     type: "line",
     data: {
       labels: subscriptionTrend.map((item) => item.month),
@@ -255,8 +247,9 @@ if (subscriptionTrend.length > 0) {
 }
 
 const budgetExecutionTrend = trends.budget_execution_trend || [];
-if (budgetExecutionTrend.length > 0) {
-  new Chart(document.getElementById("budgetExecutionTrendChart"), {
+const budgetExecutionTrendCanvas = document.getElementById("budgetExecutionTrendChart");
+if (budgetExecutionTrend.length > 0 && budgetExecutionTrendCanvas) {
+  new Chart(budgetExecutionTrendCanvas, {
     type: "bar",
     data: {
       labels: budgetExecutionTrend.map((item) => item.month),
@@ -310,8 +303,9 @@ if (budgetExecutionTrend.length > 0) {
 }
 
 const budgetDeviation = trends.budget_category_deviation || [];
-if (budgetDeviation.length > 0) {
-  new Chart(document.getElementById("budgetDeviationChart"), {
+const budgetDeviationCanvas = document.getElementById("budgetDeviationChart");
+if (budgetDeviation.length > 0 && budgetDeviationCanvas) {
+  new Chart(budgetDeviationCanvas, {
     type: "bar",
     data: {
       labels: budgetDeviation.map((item) => item.category),

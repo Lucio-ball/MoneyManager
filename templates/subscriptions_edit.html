@@ -1,100 +1,75 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MoneyManager · 编辑订阅</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
-  </head>
-  <body>
-    <header class="top-nav app-shell">
-      <div class="top-nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-dot"></span>
-          <span>MoneyManager</span>
-        </a>
-        <nav class="nav-links">
-          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
-          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
-          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
-          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
-          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
-          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
-        </nav>
-        <div class="nav-actions">
-          {% include '_global_month_selector.html' %}
-          <a class="btn-secondary" href="/subscriptions">返回订阅列表</a>
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · 编辑订阅{% endblock %}
+
+{% block nav_actions %}
+{% include '_global_month_selector.html' %}
+<a class="btn-secondary" href="/subscriptions">返回订阅列表</a>
+{% endblock %}
+
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="page-eyebrow">Subscriptions</div>
+    <h1 class="page-title">编辑订阅</h1>
+    <div class="page-subtitle">优先修正金额、周期和下次扣费日期，避免月成本统计失真。</div>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if success == '0' %}
+<section class="panel"><p class="msg danger">保存失败：请检查名称、金额、周期和扣费日期。</p></section>
+{% endif %}
+
+<section class="form-shell">
+  <article class="panel">
+    <form method="post" action="/subscriptions/edit/{{ subscription.id }}" class="form-grid">
+      <input type="hidden" name="month" value="{{ month }}" />
+      <div class="grid-2">
+        <div class="field-group">
+          <label class="field-label" for="name">订阅名称</label>
+          <input id="name" type="text" name="name" value="{{ subscription.name }}" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="amount">账单金额</label>
+          <input id="amount" type="number" step="0.01" min="0.01" name="amount" value="{{ '%.2f'|format(subscription.amount) }}" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="cycle">扣费周期</label>
+          <select id="cycle" name="cycle" required>
+            {% for cycle in cycle_options %}
+            <option value="{{ cycle }}" {% if cycle == subscription.cycle %}selected{% endif %}>
+              {% if cycle == 'monthly' %}月付{% elif cycle == 'yearly' %}年付{% elif cycle == 'weekly' %}周付{% else %}季付{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="next_billing_date">下次扣费日期</label>
+          <input id="next_billing_date" type="date" name="next_billing_date" value="{{ subscription.next_billing_date }}" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="category">分类</label>
+          <input id="category" type="text" name="category" value="{{ subscription.category if subscription.category else '' }}" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="payment_method">支付方式</label>
+          <input id="payment_method" type="text" name="payment_method" value="{{ subscription.payment_method if subscription.payment_method else '' }}" />
         </div>
       </div>
-    </header>
-
-    <main class="app-shell">
-      <div class="page">
-        <section class="panel">
-          <h1 class="page-title">编辑订阅</h1>
-          <div class="page-subtitle">更新订阅信息并同步月成本计算</div>
-          <div class="section-insight">优先修正金额、周期与下次扣费日期，避免月成本统计失真。</div>
-        </section>
-
-        <section class="panel">
-          {% if success == '0' %}
-          <div class="msg danger">保存失败：请检查名称、金额、周期和扣费日期。</div>
-          {% endif %}
-
-          <form method="post" action="/subscriptions/edit/{{ subscription.id }}" class="grid-2">
-            <input type="hidden" name="month" value="{{ month }}" />
-            <div>
-              <label class="small" for="name">订阅名称</label>
-              <input id="name" type="text" name="name" value="{{ subscription.name }}" required />
-            </div>
-
-            <div>
-              <label class="small" for="amount">账单金额</label>
-              <input id="amount" type="number" step="0.01" min="0.01" name="amount" value="{{ '%.2f'|format(subscription.amount) }}" required />
-            </div>
-
-            <div>
-              <label class="small" for="cycle">扣费周期</label>
-              <select id="cycle" name="cycle" required>
-                {% for cycle in cycle_options %}
-                <option value="{{ cycle }}" {% if cycle == subscription.cycle %}selected{% endif %}>
-                  {% if cycle == 'monthly' %}月付{% elif cycle == 'yearly' %}年付{% elif cycle == 'weekly' %}周付{% else %}季付{% endif %}
-                </option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div>
-              <label class="small" for="next_billing_date">下次扣费日期</label>
-              <input id="next_billing_date" type="date" name="next_billing_date" value="{{ subscription.next_billing_date }}" required />
-            </div>
-
-            <div>
-              <label class="small" for="category">分类</label>
-              <input id="category" type="text" name="category" value="{{ subscription.category if subscription.category else '' }}" />
-            </div>
-
-            <div>
-              <label class="small" for="payment_method">支付方式</label>
-              <input id="payment_method" type="text" name="payment_method" value="{{ subscription.payment_method if subscription.payment_method else '' }}" />
-            </div>
-
-            <div style="grid-column: 1 / -1;">
-              <label class="small" for="note">备注</label>
-              <input id="note" type="text" name="note" value="{{ subscription.note if subscription.note else '' }}" />
-            </div>
-
-            <div style="grid-column: 1 / -1;" class="toolbar">
-              <button class="btn" type="submit">保存修改</button>
-              <a class="btn-secondary" href="/subscriptions">取消</a>
-            </div>
-          </form>
-        </section>
+      <div class="field-group">
+        <label class="field-label" for="note">备注</label>
+        <input id="note" type="text" name="note" value="{{ subscription.note if subscription.note else '' }}" />
       </div>
-    </main>
-    {% include '_fab_transaction.html' %}
-    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
-  </body>
-</html>
+      <div class="toolbar">
+        <button class="btn" type="submit">保存修改</button>
+        <a class="btn-secondary" href="/subscriptions">取消</a>
+      </div>
+    </form>
+  </article>
+  <article class="panel form-side-note">
+    <div class="section-insight">修改后，订阅页中的月折算成本、续费提醒和压力判断会同步更新。</div>
+  </article>
+</section>
+{% endblock %}

@@ -1,243 +1,191 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MoneyManager · AI 月度复盘</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
-  </head>
-  <body>
-    <header class="top-nav app-shell">
-      <div class="top-nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-dot"></span>
-          <span>MoneyManager</span>
-        </a>
-        <nav class="nav-links">
-          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
-          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
-          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
-          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
-          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
-          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
-        </nav>
-        <div class="nav-actions">
-          {% include '_global_month_selector.html' %}
-          <button class="btn js-fab-open" type="button">记账</button>
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · AI 复盘工作台{% endblock %}
+
+{% block page_header %}
+{% set consumption_health = ai_package.consumption_health if ai_package and ai_package.consumption_health else (ai_package.insights.consumption_health if ai_package and ai_package.insights else {}) %}
+{% set consumption_persona = ai_package.consumption_persona if ai_package and ai_package.consumption_persona else (ai_package.insights.consumption_persona if ai_package and ai_package.insights else {}) %}
+{% set risk_radar = ai_package.risk_radar if ai_package and ai_package.risk_radar else (ai_package.insights.risk_radar if ai_package and ai_package.insights else {}) %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="page-eyebrow">AI Workspace</div>
+    <h1 class="page-title">AI 复盘工作台</h1>
+    <div class="page-subtitle">管理 AI 输入数据包、提示词模板和本地归档，让月度复盘更容易形成标准化流程。</div>
+  </div>
+  <div class="page-header-actions">
+    <a class="btn-secondary" href="/ai/monthly-review?month={{ month }}">查看结构化复盘</a>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% set consumption_health = ai_package.consumption_health if ai_package and ai_package.consumption_health else (ai_package.insights.consumption_health if ai_package and ai_package.insights else {}) %}
+{% set consumption_persona = ai_package.consumption_persona if ai_package and ai_package.consumption_persona else (ai_package.insights.consumption_persona if ai_package and ai_package.insights else {}) %}
+{% set risk_radar = ai_package.risk_radar if ai_package and ai_package.risk_radar else (ai_package.insights.risk_radar if ai_package and ai_package.insights else {}) %}
+
+<section class="kpi-grid">
+  <article class="kpi-card">
+    <div class="kpi-label">本月订阅折算成本</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.estimated_monthly_cost) }}</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">本月实际订阅扣费</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.actual_charged_amount) }}</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">本月报销金额</div>
+    <div class="kpi-value income mono">¥{{ '%.2f'|format((ai_package.monthly_stats.reimbursement_income if ai_package and ai_package.monthly_stats else 0) or 0) }}</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">本月净支出</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format((ai_package.monthly_stats.net_expense if ai_package and ai_package.monthly_stats else 0) or 0) }}</div>
+  </article>
+</section>
+
+<section class="grid-3">
+  <article class="panel">
+    <h2 class="section-title">消费健康度</h2>
+    <div class="summary-tile" style="margin-top: 18px;">
+      <div class="summary-tile-label">总分</div>
+      <div class="summary-tile-value mono">{{ '%.2f'|format(consumption_health.score or 0) }}</div>
+    </div>
+    {% if consumption_health.dimensions %}
+    <div class="category-list" style="margin-top: 18px;">
+      {% for item in consumption_health.dimensions %}
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">{{ item.label }}</div>
+          <div class="progress"><span style="width: {{ item.value }}%;"></span></div>
         </div>
+        <div class="mono">{{ '%.2f'|format(item.value) }}</div>
       </div>
-    </header>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </article>
 
-    <main class="app-shell">
-      <div class="page">
-      {% set consumption_health = ai_package.consumption_health if ai_package and ai_package.consumption_health else (ai_package.insights.consumption_health if ai_package and ai_package.insights else {}) %}
-      {% set consumption_persona = ai_package.consumption_persona if ai_package and ai_package.consumption_persona else (ai_package.insights.consumption_persona if ai_package and ai_package.insights else {}) %}
-      {% set risk_radar = ai_package.risk_radar if ai_package and ai_package.risk_radar else (ai_package.insights.risk_radar if ai_package and ai_package.insights else {}) %}
-      <section class="panel">
-        <h1 class="page-title">AI 月度复盘</h1>
-        <div class="page-subtitle">当前月份：{{ month }}</div>
-        <div class="section-insight">基于结构化数据包快速生成复盘结论，并支持归档沉淀。</div>
-        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-          <article class="kpi-card">
-            <div class="kpi-label">本月订阅折算成本（结构分析）</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.estimated_monthly_cost) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">本月实际订阅扣费（现金流分析）</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(subscription_metrics.actual_charged_amount) }}</div>
-          </article>
-        </div>
-      </section>
+  <article class="panel">
+    <h2 class="section-title">消费画像</h2>
+    <div class="review-identity" style="margin-top: 18px;">{{ consumption_persona.label or '稳健型' }}</div>
+    <div class="review-note-list" style="margin-top: 18px;">
+      <div class="review-note">{{ consumption_persona.description or '当前消费模式较平稳，建议继续保持。' }}</div>
+      {% if consumption_persona.reasons %}
+        {% for reason in consumption_persona.reasons[:3] %}
+        <div class="review-note">{{ reason }}</div>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </article>
 
-      <section class="panel">
-        <h2 class="section-title">报销与净支出分析</h2>
-        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-          <article class="kpi-card">
-            <div class="kpi-label">本月报销金额</div>
-            <div class="kpi-value income mono">¥{{ '%.2f'|format((ai_package.monthly_stats.reimbursement_income if ai_package and ai_package.monthly_stats else 0) or 0) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">本月净支出</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format((ai_package.monthly_stats.net_expense if ai_package and ai_package.monthly_stats else 0) or 0) }}</div>
-            <div class="small">净支出 = 总支出 - 报销金额</div>
-          </article>
-        </div>
-      </section>
+  <article class="panel">
+    <h2 class="section-title">风险解释</h2>
+    <div class="summary-tile" style="margin-top: 18px;">
+      <div class="summary-tile-label">风险雷达总分</div>
+      <div class="summary-tile-value mono">{{ '%.2f'|format(risk_radar.score or 0) }}</div>
+    </div>
+    <div class="review-note-list" style="margin-top: 18px;">
+      {% if risk_radar.explanations %}
+        {% for reason in risk_radar.explanations[:3] %}
+        <div class="review-note">{{ reason }}</div>
+        {% endfor %}
+      {% else %}
+      <div class="review-note">当前月份暂无明显高风险维度。</div>
+      {% endif %}
+    </div>
+  </article>
+</section>
 
-      <section class="panel">
-        <h2 class="section-title">消费健康度分析</h2>
-        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-          <article class="kpi-card">
-            <div class="kpi-label">健康度总分</div>
-            <div class="kpi-value mono">{{ '%.2f'|format(consumption_health.score or 0) }}</div>
-            <div class="small">等级：{{ consumption_health.level or '一般' }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">行为指标</div>
-            <div class="small" style="margin-top: 4px;">冲动消费占比：{{ '%.2f'|format((consumption_health.metrics.impulsive_ratio if consumption_health.metrics else 0)) }}%</div>
-            <div class="small">学习投资占比：{{ '%.2f'|format((consumption_health.metrics.learning_ratio if consumption_health.metrics else 0)) }}%</div>
-            <div class="small">日支出方差：{{ '%.2f'|format((consumption_health.metrics.daily_variance if consumption_health.metrics else 0)) }}</div>
-          </article>
-        </div>
-        {% if consumption_health.dimensions %}
-        <div class="category-list" style="margin-top: 12px;">
-          {% for item in consumption_health.dimensions %}
-          <div class="category-item">
-            <div class="category-main">
-              <div class="category-name">{{ item.label }}</div>
-              <div class="progress"><span style="width: {{ item.value }}%;"></span></div>
-            </div>
-            <div class="mono">{{ '%.2f'|format(item.value) }}</div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="helper-text" style="margin-top: 10px;">当前月份暂无足够数据生成消费健康度维度。</div>
-        {% endif %}
-      </section>
+<section class="panel">
+  <div class="toolbar" style="margin-bottom: 18px;">
+    <a class="btn-secondary" href="/ai?month={{ month }}">刷新数据</a>
+    <a class="btn-secondary" href="/api/ai/monthly/export?month={{ month }}">导出数据包 JSON</a>
+    <button class="btn" type="button" id="copy-json-btn">复制 AI 输入数据包</button>
+    <button class="btn-secondary" type="button" id="copy-prompt-btn">复制提示词模板</button>
+    <button class="btn-secondary" type="button" id="copy-full-prompt-btn">复制完整提示词</button>
+  </div>
+  <div class="grid-2">
+    <div class="field-group">
+      <label class="field-label">内置提示词模板</label>
+      <textarea id="ai-prompt-template" class="code" readonly>{{ ai_prompt_template }}</textarea>
+    </div>
+    <div class="field-group">
+      <label class="field-label">AI 输入数据包（JSON）</label>
+      <textarea id="ai-package" class="code" readonly>{{ ai_package | tojson(indent=2) }}</textarea>
+    </div>
+  </div>
+</section>
 
-      <section class="panel">
-        <h2 class="section-title">消费性格描述</h2>
-        <div class="category-item" style="margin-top: 12px;">
-          <div class="category-main">
-            <div class="category-name">{{ consumption_persona.label or '稳健型' }}</div>
-            <div class="small">{{ consumption_persona.description or '当前消费模式较平稳，建议继续保持并跟踪结构变化。' }}</div>
-          </div>
-        </div>
-        {% if consumption_persona.reasons %}
-        <div class="category-list" style="margin-top: 10px;">
-          {% for reason in consumption_persona.reasons %}
-          <div class="category-item">
-            <div class="category-main">
-              <div class="category-name">画像依据</div>
-              <div class="small">{{ reason }}</div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </section>
+{% if success == '1' %}
+<section class="panel"><p class="msg ok">AI 输出已存档。</p></section>
+{% elif success == '0' %}
+<section class="panel"><p class="msg danger">存档失败：请输入内容。</p></section>
+{% endif %}
 
-      <section class="panel">
-        <h2 class="section-title">风险解释</h2>
-        <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-          <article class="kpi-card">
-            <div class="kpi-label">风险雷达总分</div>
-            <div class="kpi-value mono">{{ '%.2f'|format(risk_radar.score or 0) }}</div>
-            <div class="small">等级：{{ risk_radar.level or '低风险' }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">维度快照</div>
-            <div class="small" style="margin-top: 4px;">冲动风险：{{ '%.2f'|format((risk_radar.metrics.impulsive_ratio if risk_radar.metrics else 0)) }}%</div>
-            <div class="small">订阅占比：{{ '%.2f'|format((risk_radar.metrics.subscription_ratio if risk_radar.metrics else 0)) }}%</div>
-            <div class="small">消费波动 CV：{{ '%.4f'|format((risk_radar.metrics.daily_cv if risk_radar.metrics else 0)) }}</div>
-          </article>
-        </div>
-        {% if risk_radar.explanations %}
-        <div class="category-list" style="margin-top: 12px;">
-          {% for reason in risk_radar.explanations %}
-          <div class="category-item">
-            <div class="category-main">
-              <div class="category-name">风险说明</div>
-              <div class="small">{{ reason }}</div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="helper-text" style="margin-top: 10px;">当前月份暂无明显高风险维度。</div>
-        {% endif %}
-      </section>
-
-      <section class="panel">
-        <div class="toolbar" style="margin-bottom: 12px;">
-          <a class="btn-secondary" href="/ai?month={{ month }}">刷新数据</a>
-          <a class="btn-secondary" href="/api/ai/monthly/export?month={{ month }}">导出数据包 JSON</a>
-          <button class="btn" type="button" id="copy-json-btn">复制 AI 输入数据包</button>
-          <button class="btn-secondary" type="button" id="copy-prompt-btn">复制提示词模板</button>
-          <button class="btn-secondary" type="button" id="copy-full-prompt-btn">复制完整提示词（模板+数据）</button>
-        </div>
-
-        <div class="grid-2">
-          <div>
-            <div class="small" style="margin-bottom: 6px;">内置提示词模板</div>
-            <textarea id="ai-prompt-template" class="code" readonly>{{ ai_prompt_template }}</textarea>
-          </div>
-          <div>
-            <div class="small" style="margin-bottom: 6px;">AI 输入数据包（JSON）</div>
-            <textarea id="ai-package" class="code" readonly>{{ ai_package | tojson(indent=2) }}</textarea>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        {% if success == '1' %}
-        <div class="msg ok">AI 输出已存档。</div>
-        {% elif success == '0' %}
-        <div class="msg danger">存档失败：请输入内容。</div>
-        {% endif %}
-
+<section class="form-shell">
+  <article class="panel">
+    <div class="section-head">
+      <div>
         <h2 class="section-title">存档 AI 输出</h2>
-        <form method="post" action="/ai">
-          <input type="hidden" name="month" value="{{ month }}" />
-          <textarea class="code" name="content" placeholder="把 AI 的复盘输出粘贴到这里..."></textarea>
-          <div class="toolbar" style="margin-top: 8px;">
-            <button class="btn" type="submit">保存到本地存档</button>
-          </div>
-        </form>
-      </section>
-
-      <section class="panel">
-        <h2 class="section-title">本月历史存档</h2>
-        {% if archives %}
-          {% for item in archives %}
-          <article class="archive-item">
-            <div class="small">#{{ item.id }} · {{ item.created_at }}</div>
-            <div style="white-space: pre-wrap; margin-top: 8px; line-height: 1.7;">{{ item.content }}</div>
-          </article>
-          {% endfor %}
-        {% else %}
-          <p class="helper-text">本月暂无存档。</p>
-        {% endif %}
-      </section>
+        <div class="section-desc">把外部 AI 的复盘结果粘贴进来，统一留存。</div>
       </div>
-    </main>
+    </div>
+    <form method="post" action="/ai" style="margin-top: 18px;">
+      <input type="hidden" name="month" value="{{ month }}" />
+      <textarea class="code" name="content" placeholder="把 AI 的复盘输出粘贴到这里..."></textarea>
+      <div class="toolbar" style="margin-top: 14px;">
+        <button class="btn" type="submit">保存到本地存档</button>
+      </div>
+    </form>
+  </article>
+  <article class="panel">
+    <h2 class="section-title">本月历史存档</h2>
+    {% if archives %}
+      <div class="review-note-list" style="margin-top: 18px;">
+        {% for item in archives %}
+        <article class="archive-item">
+          <div class="small">#{{ item.id }} · {{ item.created_at }}</div>
+          <div style="white-space: pre-wrap; margin-top: 10px; line-height: 1.7;">{{ item.content }}</div>
+        </article>
+        {% endfor %}
+      </div>
+    {% else %}
+    <div class="helper-text" style="margin-top: 18px;">本月暂无存档。</div>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}
 
-    <script>
-      const copyButton = document.getElementById("copy-json-btn");
-      const copyPromptButton = document.getElementById("copy-prompt-btn");
-      const copyFullPromptButton = document.getElementById("copy-full-prompt-btn");
-      const packageText = document.getElementById("ai-package");
-      const promptTemplateText = document.getElementById("ai-prompt-template");
+{% block extra_scripts %}
+<script>
+  const copyButton = document.getElementById("copy-json-btn");
+  const copyPromptButton = document.getElementById("copy-prompt-btn");
+  const copyFullPromptButton = document.getElementById("copy-full-prompt-btn");
+  const packageText = document.getElementById("ai-package");
+  const promptTemplateText = document.getElementById("ai-prompt-template");
 
-      const copyToClipboard = async (text, button, defaultText, successText) => {
-        try {
-          await navigator.clipboard.writeText(text);
-          button.textContent = successText;
-          setTimeout(() => {
-            button.textContent = defaultText;
-          }, 1200);
-        } catch (error) {
-          alert("复制失败，请手动复制文本框内容。");
-        }
-      };
+  const copyToClipboard = async (text, button, defaultText, successText) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      button.textContent = successText;
+      setTimeout(() => {
+        button.textContent = defaultText;
+      }, 1200);
+    } catch (_error) {
+      alert("复制失败，请手动复制文本框内容。");
+    }
+  };
 
-      copyButton.addEventListener("click", async () => {
-        await copyToClipboard(packageText.value, copyButton, "复制 AI 输入数据包", "已复制");
-      });
+  copyButton.addEventListener("click", async () => {
+    await copyToClipboard(packageText.value, copyButton, "复制 AI 输入数据包", "已复制");
+  });
 
-      copyPromptButton.addEventListener("click", async () => {
-        await copyToClipboard(promptTemplateText.value, copyPromptButton, "复制提示词模板", "已复制");
-      });
+  copyPromptButton.addEventListener("click", async () => {
+    await copyToClipboard(promptTemplateText.value, copyPromptButton, "复制提示词模板", "已复制");
+  });
 
-      copyFullPromptButton.addEventListener("click", async () => {
-        const fullPrompt = `${promptTemplateText.value}\n\n【本月数据包（JSON）】\n${packageText.value}`;
-        await copyToClipboard(fullPrompt, copyFullPromptButton, "复制完整提示词（模板+数据）", "已复制");
-      });
-    </script>
-    {% include '_fab_transaction.html' %}
-    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
-  </body>
-</html>
+  copyFullPromptButton.addEventListener("click", async () => {
+    const fullPrompt = `${promptTemplateText.value}\n\n【本月数据包（JSON）】\n${packageText.value}`;
+    await copyToClipboard(fullPrompt, copyFullPromptButton, "复制完整提示词", "已复制");
+  });
+</script>
+{% endblock %}

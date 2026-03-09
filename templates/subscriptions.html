@@ -1,316 +1,276 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MoneyManager · 订阅管理</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
-    <header class="top-nav app-shell">
-      <div class="top-nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-dot"></span>
-          <span>MoneyManager</span>
-        </a>
-        <nav class="nav-links">
-          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
-          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
-          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
-          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
-          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
-          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
-        </nav>
-        <div class="nav-actions">
-          {% include '_global_month_selector.html' %}
-          <a class="btn-secondary" href="/">回到仪表盘</a>
-          <a class="btn" href="/subscriptions/add">新增订阅</a>
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · 订阅管理{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block nav_actions %}
+{% include '_global_month_selector.html' %}
+<a class="btn-secondary" href="/">仪表盘</a>
+<a class="btn" href="/subscriptions/add">新增订阅</a>
+{% endblock %}
+
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="page-eyebrow">Subscriptions</div>
+    <h1 class="page-title">订阅控制台</h1>
+    <div class="page-subtitle">统一查看订阅月折算成本、续费密度、压力等级和清理候选，让固定成本更可控。</div>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if success == 'created' %}
+<section class="panel"><p class="msg ok">订阅创建成功。</p></section>
+{% elif success == 'updated' %}
+<section class="panel"><p class="msg ok">订阅更新成功。</p></section>
+{% endif %}
+
+<section class="kpi-grid">
+  <article class="kpi-card">
+    <div class="kpi-label">订阅月折算总成本</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.total_monthly_cost) }}</div>
+    <div class="small">固定成本基线</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">订阅总数</div>
+    <div class="kpi-value mono">{{ summary.total_count }}</div>
+    <div class="small">当前活跃项目</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">7 天内即将扣费</div>
+    <div class="kpi-value mono">{{ summary.upcoming_count }}</div>
+    <div class="small">需要重点关注</div>
+  </article>
+  <article class="kpi-card">
+    <div class="kpi-label">过期项目</div>
+    <div class="kpi-value mono">{{ summary.expired_count }}</div>
+    <div class="small">建议清理失效记录</div>
+  </article>
+</section>
+
+<section class="grid-2">
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">续费预警</h2>
+        <div class="section-desc">把最近 7 天与 30 天的扣费提醒整理成清晰列表。</div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top: 18px;">
+      <div class="summary-tile">
+        <div class="summary-tile-label">7 天内</div>
+        <div class="summary-tile-value mono">{{ alerts.upcoming_7_days_count }}</div>
+      </div>
+      <div class="summary-tile">
+        <div class="summary-tile-label">30 天内</div>
+        <div class="summary-tile-value mono">{{ alerts.upcoming_30_days_count }}</div>
+      </div>
+      <div class="summary-tile">
+        <div class="summary-tile-label">本月预计成本</div>
+        <div class="summary-tile-value is-danger mono">¥{{ '%.2f'|format(alerts.monthly_subscription_cost) }}</div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top: 18px;">
+      <article class="panel panel-nested">
+        <h3 class="card-title">7 天内扣费</h3>
+        {% if alerts.upcoming_7_days %}
+        <div class="category-list" style="margin-top: 14px;">
+          {% for item in alerts.upcoming_7_days %}
+          <div class="category-item">
+            <div class="category-main">
+              <div class="category-name">{{ item.name }}</div>
+              <div class="small">{{ item.next_billing_date }} · {{ cycle_labels[item.cycle] }}</div>
+            </div>
+            <div class="mono">¥{{ '%.2f'|format(item.monthly_cost) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="helper-text" style="margin-top: 14px;">未来 7 天暂无续费压力。</div>
+        {% endif %}
+      </article>
+      <article class="panel panel-nested">
+        <h3 class="card-title">30 天内扣费</h3>
+        {% if alerts.upcoming_30_days %}
+        <div class="category-list" style="margin-top: 14px;">
+          {% for item in alerts.upcoming_30_days[:5] %}
+          <div class="category-item">
+            <div class="category-main">
+              <div class="category-name">{{ item.name }}</div>
+              <div class="small">{{ item.next_billing_date }} · {{ cycle_labels[item.cycle] }}</div>
+            </div>
+            <div class="mono">¥{{ '%.2f'|format(item.monthly_cost) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="helper-text" style="margin-top: 14px;">未来 30 天暂无续费提醒。</div>
+        {% endif %}
+      </article>
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">订阅价值评估</h2>
+        <div class="section-desc">突出高压力、可取消和稳定低成本订阅。</div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top: 18px;">
+      <div class="summary-tile">
+        <div class="summary-tile-label">订阅压力</div>
+        <div class="summary-tile-value mono">{{ '%.2f'|format(subscription_health.subscription_pressure) }}%</div>
+      </div>
+      <div class="summary-tile">
+        <div class="summary-tile-label">订阅数量</div>
+        <div class="summary-tile-value mono">{{ subscription_health.subscription_count }}</div>
+      </div>
+    </div>
+    <div class="category-list" style="margin-top: 18px;">
+      {% if subscription_health.high_pressure_items %}
+        {% for item in subscription_health.high_pressure_items[:3] %}
+        <div class="category-item">
+          <div class="category-main">
+            <div class="category-name">{{ item.name }}</div>
+            <div class="small">压力 {{ '%.2f'|format(item.pressure) }}%{% if item.days_until_billing is not none %} · {{ item.days_until_billing }} 天后扣费{% endif %}</div>
+          </div>
+          <span class="status-badge danger">高压力</span>
+        </div>
+        {% endfor %}
+      {% endif %}
+      {% if subscription_health.cancel_candidates %}
+        {% for item in subscription_health.cancel_candidates[:2] %}
+        <div class="category-item">
+          <div class="category-main">
+            <div class="category-name">{{ item.name }}</div>
+            <div class="small">同月密集 {{ item.same_month_count }} 个 · 月折算 ¥{{ '%.2f'|format(item.monthly_cost) }}</div>
+          </div>
+          <span class="status-badge warning">可优化</span>
+        </div>
+        {% endfor %}
+      {% endif %}
+      {% if not subscription_health.high_pressure_items and not subscription_health.cancel_candidates %}
+      <div class="helper-text">当前没有明显高压力或取消候选订阅。</div>
+      {% endif %}
+    </div>
+    <div class="section-insight" style="margin-top: 18px;">
+      {% if subscription_health.value_insights %}
+        {{ subscription_health.value_insights | join(' ') }}
+      {% else %}
+        当前订阅结构整体平稳，可继续按月观察续费密度和固定成本变化。
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<section class="grid-2">
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">订阅周期分布</h2>
+        <div class="section-desc">查看付款周期结构。</div>
+      </div>
+    </div>
+    {% if summary.total_count > 0 %}
+    <div class="chart-stage is-compact"><canvas id="subscriptionCycleChart"></canvas></div>
+    {% else %}
+    <div class="helper-text" style="margin-top: 18px;">暂无订阅数据。</div>
+    {% endif %}
+  </article>
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">月折算成本 TOP 5</h2>
+        <div class="section-desc">定位真正占预算的固定成本。</div>
+      </div>
+    </div>
+    {% if summary.top_monthly_cost %}
+    <div class="chart-stage is-compact"><canvas id="subscriptionTopCostChart"></canvas></div>
+    {% else %}
+    <div class="helper-text" style="margin-top: 18px;">暂无可展示的成本排行。</div>
+    {% endif %}
+  </article>
+</section>
+
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">订阅列表</h2>
+      <div class="section-desc">每个订阅卡片展示价格、周期、下次扣费、月折算成本与状态标签。</div>
+    </div>
+  </div>
+  {% if subscriptions %}
+  <div class="subscription-grid" style="margin-top: 18px;">
+    {% for item in subscriptions %}
+    <article class="subscription-card" id="subscription-card-{{ item.id }}">
+      <div class="subscription-head">
+        <div>
+          <div class="subscription-name">{{ item.name }}</div>
+          <div class="small">{{ cycle_labels[item.cycle] }} · 下次扣费 {{ item.next_billing_date }}</div>
+        </div>
+        <div>
+          {% if item.is_expired %}
+          <span class="badge danger">已过期</span>
+          {% elif item.is_upcoming %}
+          <span class="badge warn">7天内扣费</span>
+          {% else %}
+          <span class="badge ok">正常</span>
+          {% endif %}
         </div>
       </div>
-    </header>
-
-    <main class="app-shell">
-      <div class="page">
-        <section class="panel">
-          <h1 class="page-title">订阅管理</h1>
-          <div class="page-subtitle">统一查看月成本、即将扣费与到期风险</div>
-          <div class="section-insight">持续跟踪订阅结构，可快速定位低频高价与待清理订阅项。</div>
-        </section>
-
-        {% if success == 'created' %}
-        <section class="panel"><div class="msg ok">订阅创建成功。</div></section>
-        {% elif success == 'updated' %}
-        <section class="panel"><div class="msg ok">订阅更新成功。</div></section>
-        {% endif %}
-
-        <section class="kpi-grid">
-          <article class="kpi-card">
-            <div class="kpi-label">订阅月折算总成本</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.total_monthly_cost) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">订阅总数</div>
-            <div class="kpi-value mono">{{ summary.total_count }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">未来 7 天即将扣费</div>
-            <div class="kpi-value mono">{{ summary.upcoming_count }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">已过期项目</div>
-            <div class="kpi-value mono">{{ summary.expired_count }}</div>
-          </article>
-        </section>
-
-        <section class="grid-2">
-          <article class="panel">
-            <h2 class="section-title">续费预警</h2>
-            <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(3, minmax(0, 1fr));">
-              <article class="kpi-card">
-                <div class="kpi-label">7 天内</div>
-                <div class="kpi-value mono">{{ alerts.upcoming_7_days_count }}</div>
-              </article>
-              <article class="kpi-card">
-                <div class="kpi-label">30 天内</div>
-                <div class="kpi-value mono">{{ alerts.upcoming_30_days_count }}</div>
-              </article>
-              <article class="kpi-card">
-                <div class="kpi-label">本月预计成本</div>
-                <div class="kpi-value expense mono">楼{{ '%.2f'|format(alerts.monthly_subscription_cost) }}</div>
-              </article>
-            </div>
-            <div class="grid-2" style="margin-top: 12px;">
-              <article class="panel panel-nested">
-                <h3 class="section-title" style="font-size: 17px;">7 天内即将扣费</h3>
-                {% if alerts.upcoming_7_days %}
-                <div class="category-list" style="margin-top: 10px;">
-                  {% for item in alerts.upcoming_7_days %}
-                  <div class="category-item">
-                    <div class="category-main">
-                      <div class="category-name">{{ item.name }}</div>
-                      <div class="small">{{ item.next_billing_date }} 路 {{ cycle_labels[item.cycle] }}</div>
-                    </div>
-                    <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="helper-text" style="margin-top: 10px;">未来 7 天暂无续费压力。</div>
-                {% endif %}
-              </article>
-              <article class="panel panel-nested">
-                <h3 class="section-title" style="font-size: 17px;">30 天内即将扣费</h3>
-                {% if alerts.upcoming_30_days %}
-                <div class="category-list" style="margin-top: 10px;">
-                  {% for item in alerts.upcoming_30_days[:5] %}
-                  <div class="category-item">
-                    <div class="category-main">
-                      <div class="category-name">{{ item.name }}</div>
-                      <div class="small">{{ item.next_billing_date }} 路 {{ cycle_labels[item.cycle] }}</div>
-                    </div>
-                    <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="helper-text" style="margin-top: 10px;">未来 30 天暂无续费提醒。</div>
-                {% endif %}
-              </article>
-            </div>
-          </article>
-          <article class="panel">
-            <h2 class="section-title">订阅价值评估</h2>
-            <div class="kpi-grid" style="margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-              <article class="kpi-card">
-                <div class="kpi-label">订阅压力</div>
-                <div class="kpi-value mono">{{ '%.2f'|format(subscription_health.subscription_pressure) }}%</div>
-                <div class="small">折算成本 / 本月总支出</div>
-              </article>
-              <article class="kpi-card">
-                <div class="kpi-label">订阅数量</div>
-                <div class="kpi-value mono">{{ subscription_health.subscription_count }}</div>
-              </article>
-            </div>
-            <div class="grid-2" style="margin-top: 12px;">
-              <article class="panel panel-nested">
-                <h3 class="section-title" style="font-size: 17px;">高压力订阅</h3>
-                {% if subscription_health.high_pressure_items %}
-                <div class="category-list" style="margin-top: 10px;">
-                  {% for item in subscription_health.high_pressure_items[:4] %}
-                  <div class="category-item">
-                    <div class="category-main">
-                      <div class="category-name">{{ item.name }}</div>
-                      <div class="small">压力 {{ '%.2f'|format(item.pressure) }}%{% if item.days_until_billing is not none %} 路 {{ item.days_until_billing }} 天后扣费{% endif %}</div>
-                    </div>
-                    <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="helper-text" style="margin-top: 10px;">暂无明显高压力订阅。</div>
-                {% endif %}
-              </article>
-              <article class="panel panel-nested">
-                <h3 class="section-title" style="font-size: 17px;">可考虑取消</h3>
-                {% if subscription_health.cancel_candidates %}
-                <div class="category-list" style="margin-top: 10px;">
-                  {% for item in subscription_health.cancel_candidates[:4] %}
-                  <div class="category-item">
-                    <div class="category-main">
-                      <div class="category-name">{{ item.name }}</div>
-                      <div class="small">{{ item.cycle }} 路 同月密集 {{ item.same_month_count }} 个</div>
-                    </div>
-                    <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="helper-text" style="margin-top: 10px;">当前没有明显的取消候选。</div>
-                {% endif %}
-              </article>
-            </div>
-            <div class="grid-2" style="margin-top: 12px;">
-              <article class="panel panel-nested">
-                <h3 class="section-title" style="font-size: 17px;">低成本稳定订阅</h3>
-                {% if subscription_health.low_cost_stable_items %}
-                <div class="category-list" style="margin-top: 10px;">
-                  {% for item in subscription_health.low_cost_stable_items[:4] %}
-                  <div class="category-item">
-                    <div class="category-main">
-                      <div class="category-name">{{ item.name }}</div>
-                      <div class="small">持续 {{ item.stable_days }} 天</div>
-                    </div>
-                    <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="helper-text" style="margin-top: 10px;">暂无明显的低成本稳定订阅。</div>
-                {% endif %}
-              </article>
-              <article class="panel panel-nested">
-                <h3 class="section-title" style="font-size: 17px;">年费摊销偏高</h3>
-                {% if subscription_health.annualized_high_items %}
-                <div class="category-list" style="margin-top: 10px;">
-                  {% for item in subscription_health.annualized_high_items[:4] %}
-                  <div class="category-item">
-                    <div class="category-main">
-                      <div class="category-name">{{ item.name }}</div>
-                      <div class="small">原始账单 楼{{ '%.2f'|format(item.amount) }}</div>
-                    </div>
-                    <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="helper-text" style="margin-top: 10px;">暂无高摊销年费订阅。</div>
-                {% endif %}
-              </article>
-            </div>
-            <div class="section-insight">
-              {% if subscription_health.value_insights %}
-                {{ subscription_health.value_insights | join(' ') }}
+      <div class="subscription-meta">
+        <div>账单金额 <strong class="mono">¥{{ '%.2f'|format(item.amount) }}</strong></div>
+        <div>月折算成本 <strong class="mono">¥{{ '%.2f'|format(item.monthly_cost) }}</strong></div>
+        <div>分类 <strong>{{ item.category if item.category else '-' }}</strong></div>
+        <div>支付方式 <strong>{{ item.payment_method if item.payment_method else '-' }}</strong></div>
+      </div>
+      <div class="category-list" style="margin-top: 18px;">
+        <div class="category-item">
+          <div class="category-main">
+            <div class="category-name">状态判断</div>
+            <div class="small">
+              {% if item.is_upcoming %}
+              未来 7 天内到期，建议确认是否保留。
+              {% elif item.is_expired %}
+              当前记录已过期，如已取消可直接清理。
               {% else %}
-                当前订阅结构整体平稳，可继续按月观察续费密度和固定成本变化。
+              当前状态正常，可继续跟踪使用价值。
               {% endif %}
             </div>
-          </article>
-        </section>
-
-        <section class="grid-2">
-          <article class="panel">
-            <h2 class="section-title">订阅周期分布</h2>
-            {% if summary.total_count > 0 %}
-            <div style="height: 260px; margin-top: 12px;"><canvas id="subscriptionCycleChart"></canvas></div>
-            {% else %}
-            <div class="helper-text">暂无订阅数据。</div>
-            {% endif %}
-          </article>
-          <article class="panel">
-            <h2 class="section-title">月折算成本 TOP 5</h2>
-            {% if summary.top_monthly_cost %}
-            <div style="height: 260px; margin-top: 12px;"><canvas id="subscriptionTopCostChart"></canvas></div>
-            {% else %}
-            <div class="helper-text">暂无可展示的成本排行。</div>
-            {% endif %}
-          </article>
-        </section>
-
-        <section class="panel">
-          <h2 class="section-title">未来 7 天扣费提醒</h2>
-          {% if upcoming %}
-          <div class="category-list" style="margin-top: 10px;">
-            {% for item in upcoming %}
-            <div class="category-item">
-              <div class="category-main">
-                <div class="category-name">{{ item.name }}</div>
-                <div class="small">{{ item.next_billing_date }} · {{ cycle_labels[item.cycle] }}</div>
-              </div>
-              <div class="mono" style="text-align: right;">
-                <div>¥{{ '%.2f'|format(item.amount) }}</div>
-                <div class="small">月折算 ¥{{ '%.2f'|format(item.monthly_cost) }}</div>
-              </div>
-            </div>
-            {% endfor %}
           </div>
-          {% else %}
-          <div class="helper-text">未来 7 天暂无订阅扣费。</div>
-          {% endif %}
-        </section>
-
-        <section class="panel">
-          <h2 class="section-title">订阅列表</h2>
-          {% if subscriptions %}
-          <div class="subscription-grid" style="margin-top: 10px;">
-            {% for item in subscriptions %}
-            <article class="subscription-card" id="subscription-card-{{ item.id }}">
-              <div class="subscription-head">
-                <div>
-                  <div class="subscription-name">{{ item.name }}</div>
-                  <div class="small">
-                    {{ cycle_labels[item.cycle] }} · 下次扣费 {{ item.next_billing_date }}
-                  </div>
-                </div>
-                <div>
-                  {% if item.is_expired %}
-                  <span class="badge danger">已过期</span>
-                  {% elif item.is_upcoming %}
-                  <span class="badge warn">即将扣费</span>
-                  {% else %}
-                  <span class="badge ok">正常</span>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="subscription-meta">
-                <div>账单金额 <span class="mono">¥{{ '%.2f'|format(item.amount) }}</span></div>
-                <div>月折算 <span class="mono">¥{{ '%.2f'|format(item.monthly_cost) }}</span></div>
-                <div>分类 {{ item.category if item.category else '-' }}</div>
-                <div>支付方式 {{ item.payment_method if item.payment_method else '-' }}</div>
-                <div>备注 {{ item.note if item.note else '-' }}</div>
-              </div>
-              <div class="toolbar" style="margin-top: 12px;">
-                <a class="btn-secondary" href="/subscriptions/edit/{{ item.id }}">编辑</a>
-                <button class="btn-danger delete-subscription-btn" type="button" data-id="{{ item.id }}" data-name="{{ item.name }}">取消订阅</button>
-              </div>
-            </article>
-            {% endfor %}
+        </div>
+        <div class="category-item">
+          <div class="category-main">
+            <div class="category-name">备注</div>
+            <div class="small">{{ item.note if item.note else '暂无备注' }}</div>
           </div>
-          {% else %}
-          <div class="helper-text">暂无订阅，先新增一个试试。</div>
-          {% endif %}
-        </section>
+        </div>
       </div>
-    </main>
+      <div class="toolbar" style="margin-top: 18px;">
+        <a class="btn-secondary" href="/subscriptions/edit/{{ item.id }}">编辑</a>
+        <button class="btn-danger delete-subscription-btn" type="button" data-id="{{ item.id }}" data-name="{{ item.name }}">取消订阅</button>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="helper-text" style="margin-top: 18px;">暂无订阅，先新增一个试试。</div>
+  {% endif %}
+</section>
+{% endblock %}
 
-    <script id="subscription-dashboard-data" type="application/json">
-      {{ {'summary': summary, 'subscriptions': subscriptions} | tojson }}
-    </script>
-    {% include '_fab_transaction.html' %}
-    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
-  </body>
-</html>
+{% block base_scripts %}
+<script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script id="subscription-dashboard-data" type="application/json">
+  {{ {'summary': summary, 'subscriptions': subscriptions} | tojson }}
+</script>
+<script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
+{% endblock %}

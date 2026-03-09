@@ -1,488 +1,504 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MoneyManager · 首页仪表盘</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
-    <header class="top-nav app-shell">
-      <div class="top-nav-inner">
-        <a class="brand" href="/">
-          <span class="brand-dot"></span>
-          <span>MoneyManager</span>
-        </a>
-        <nav class="nav-links">
-          <a class="nav-link {{ 'active' if active_page == 'index' else '' }}" href="/">首页</a>
-          <a class="nav-link {{ 'active' if active_page == 'analysis' else '' }}" href="/analysis">分析</a>
-          <a class="nav-link {{ 'active' if active_page == 'calendar' else '' }}" href="/calendar">日历</a>
-          <a class="nav-link {{ 'active' if active_page == 'budget' else '' }}" href="/budget">预算</a>
-          <a class="nav-link {{ 'active' if active_page == 'goals' else '' }}" href="/goals">目标</a>
-          <a class="nav-link {{ 'active' if active_page == 'subscriptions' else '' }}" href="/subscriptions">订阅</a>
-          <a class="nav-link {{ 'active' if active_page == 'ai' else '' }}" href="/ai">AI 复盘</a>
-        </nav>
-        <div class="nav-actions">
-          {% include '_global_month_selector.html' %}
-          <button class="btn js-fab-open" type="button">记账</button>
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · 首页仪表盘{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="page-eyebrow">Overview</div>
+    <h1 class="page-title">财务总览</h1>
+    <div class="page-subtitle">聚焦收入、净支出、预算执行率与订阅压力，用一个干净的控制台快速掌握 {{ month }} 的财务状态。</div>
+  </div>
+  <div class="page-header-actions">
+    <a class="btn-secondary" href="/analysis">查看深度分析</a>
+    <a class="btn-secondary" href="/budget">预算管理</a>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+<section class="kpi-grid">
+  <article class="kpi-card">
+    <div class="kpi-label">收入</div>
+    <div class="kpi-value income mono">¥{{ '%.2f'|format(summary.gross_income) }}</div>
+    <div class="metric-pair">
+      <div class="small">真实收入 ¥{{ '%.2f'|format(summary.real_income or 0) }}</div>
+      <div class="small">报销到账 ¥{{ '%.2f'|format(summary.reimbursement_income or 0) }}</div>
+    </div>
+  </article>
+
+  <article class="kpi-card">
+    <div class="kpi-label">净支出</div>
+    <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.net_expense or summary.gross_expense) }}</div>
+    <div class="metric-pair">
+      <div class="small">总支出 ¥{{ '%.2f'|format(summary.gross_expense) }}</div>
+      <div class="small">今日支出 ¥{{ '%.2f'|format(today_expense) }}</div>
+    </div>
+  </article>
+
+  <article class="kpi-card">
+    <div class="kpi-label">结余</div>
+    <div class="kpi-value {{ 'income' if summary.balance >= 0 else 'expense' }} mono">¥{{ '%.2f'|format(summary.balance) }}</div>
+    <div class="metric-pair">
+      <div class="small">待报销 ¥{{ '%.2f'|format(reimbursement_progress.pending_amount or 0) }}</div>
+      <div class="small">已报销 {{ '%.2f'|format(reimbursement_progress.completion_rate or 0) }}%</div>
+    </div>
+  </article>
+
+  <article class="kpi-card">
+    <div class="kpi-label">预算执行率</div>
+    <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.execution_rate) }}%</div>
+    <div class="metric-pair">
+      <div class="small">{{ budget_health.score.level }} · 预算健康度 {{ '%.2f'|format(budget_health.score.value) }}</div>
+      <div class="small">消费健康度 {{ '%.2f'|format(consumption_health.score or 0) }}</div>
+    </div>
+  </article>
+</section>
+
+<section class="dashboard-main-grid">
+  <article class="panel chart-panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">现金流趋势</h2>
+        <div class="section-desc">观察本月消费节奏与高峰时段，定位需要提前控制的支出窗口。</div>
+      </div>
+      <div class="status-badge neutral">{{ month }}</div>
+    </div>
+    {% if daily_expense %}
+    <div class="chart-stage"><canvas id="dailyExpenseChart"></canvas></div>
+    <div class="section-insight">连续高位波段通常对应固定账单、周末消费或集中补单，适合结合预算提醒提前干预。</div>
+    {% else %}
+    <div class="helper-text" style="margin-top: 18px;">该月份暂无支出数据。</div>
+    {% endif %}
+  </article>
+
+  <div class="dashboard-aside-stack">
+    <article class="panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">消费结构</h2>
+          <div class="section-desc">本月主要类别占比与支出集中度。</div>
         </div>
       </div>
-    </header>
+      {% if category_share %}
+      <div class="chart-stage is-compact"><canvas id="categoryPieChart"></canvas></div>
+      {% else %}
+      <div class="helper-text" style="margin-top: 18px;">该月份暂无类别数据。</div>
+      {% endif %}
+    </article>
 
-    <main class="app-shell">
-      <div class="page">
-        <section class="panel">
-          <h1 class="page-title">首页仪表盘</h1>
-          <div class="page-subtitle">当前月份：{{ month }}</div>
-          <div class="section-insight">聚焦现金流、预算风险与订阅压力，快速掌握当月财务健康度。</div>
-        </section>
-
-        <section class="kpi-grid">
-          <article class="kpi-card">
-            <div class="kpi-label">本月总支出</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.gross_expense) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">本月总收入</div>
-            <div class="kpi-value income mono">¥{{ '%.2f'|format(summary.gross_income) }}</div>
-            <div class="small">真实收入（不含报销）：¥{{ '%.2f'|format(summary.real_income or 0) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">本月结余</div>
-            <div class="kpi-value mono">¥{{ '%.2f'|format(summary.balance) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">本月报销金额</div>
-            <div class="kpi-value income mono">¥{{ '%.2f'|format(summary.reimbursement_income or 0) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">本月净支出</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(summary.net_expense or summary.gross_expense) }}</div>
-            <div class="small">净支出 = 总支出 - 报销金额</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">今日支出</div>
-            <div class="kpi-value expense mono">¥{{ '%.2f'|format(today_expense) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">报销进度</div>
-            <div class="kpi-value mono">{{ '%.2f'|format(reimbursement_progress.completion_rate or 0) }}%</div>
-            <div class="small">待报销：¥{{ '%.2f'|format(reimbursement_progress.pending_amount or 0) }}</div>
-            <div class="small">已报销：¥{{ '%.2f'|format(reimbursement_progress.reimbursed_amount or 0) }} / ¥{{ '%.2f'|format(reimbursement_progress.tracked_amount or 0) }}</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">预算健康度</div>
-            <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.value) }}</div>
-            <div class="small">{{ budget_health.score.level }} · 执行率 {{ '%.2f'|format(budget_health.score.execution_rate) }}%</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">消费健康度</div>
-            <div class="kpi-value mono">{{ '%.2f'|format(consumption_health.score or 0) }}</div>
-            <div class="small">{{ consumption_health.level or '一般' }} · 冲动占比 {{ '%.2f'|format((consumption_health.metrics.impulsive_ratio if consumption_health.metrics else 0)) }}%</div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">订阅压力</div>
-            <div class="kpi-value mono" id="subscription-pressure-cost">¥{{ '%.2f'|format(home_risk_cards.subscription_pressure.monthly_cost) }}</div>
-            <div class="small" id="subscription-pressure-ratio">占本月总支出 {{ '%.2f'|format(home_risk_cards.subscription_pressure.ratio) }}%</div>
-            <div class="small" id="subscription-pressure-level">风险等级：{{ home_risk_cards.subscription_pressure.risk_level }}</div>
-            <div style="height: 120px; margin-top: 8px;"><canvas id="subscriptionPressureChart"></canvas></div>
-          </article>
-          <article class="kpi-card">
-            <div class="kpi-label">预算风险</div>
-            <div class="kpi-value mono" id="budget-risk-rate">执行率 {{ '%.2f'|format(home_risk_cards.budget_risk.execution_rate) }}%</div>
-            <div class="small" id="budget-risk-categories">风险类别：{{ home_risk_cards.budget_risk.risk_categories | join(' / ') if home_risk_cards.budget_risk.risk_categories else '暂无' }}</div>
-            <div class="small" id="budget-risk-forecast">预测：{{ '预计会超支' if home_risk_cards.budget_risk.will_overspend else '预计可控' }}（期末 {{ '%.2f'|format(home_risk_cards.budget_risk.projected_execution_rate) }}%）</div>
-            <div style="height: 120px; margin-top: 8px;"><canvas id="budgetRiskChart"></canvas></div>
-          </article>
-        </section>
-
-        <section class="layout-main">
-          <article class="panel">
-            <div class="section-head">
-              <div>
-                <h2 class="section-title">每日支出趋势</h2>
-                <div class="section-desc">观察本月消费节奏的波动与峰值。</div>
-              </div>
-            </div>
-            {% if daily_expense %}
-            <div style="height: 320px; margin-top: 12px;"><canvas id="dailyExpenseChart"></canvas></div>
-            <div class="section-insight">洞察：连续高位区间通常对应固定账单或集中消费时段，可结合预算预警提前干预。</div>
-            {% else %}
-            <div class="helper-text">该月份暂无支出数据。</div>
-            {% endif %}
-          </article>
-
-          <div class="stack">
-            <article class="panel emotion-card">
-              <div class="status-dot {{ emotion_light.level }}"></div>
-              <div class="kpi-label">本月状态</div>
-              <div class="status-text">{{ emotion_light.label }} · {{ emotion_light.reason }}</div>
-            </article>
-
-            <article class="panel">
-              <h2 class="section-title">预算风险提示</h2>
-              {% if budget_health.risk_hints %}
-              <div class="category-list" style="margin-top: 10px;">
-                {% for hint in budget_health.risk_hints %}
-                <div class="category-item">
-                  <div class="category-main">
-                    <div class="category-name">{{ hint }}</div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-              <div class="section-insight">洞察：优先处理“刚需类超支”与“高频冲动消费”组合项，改善会最明显。</div>
-              {% else %}
-              <div class="helper-text">当前月未识别到明显预算风险类别。</div>
-              {% endif %}
-            </article>
-
-            <article class="panel">
-              <h2 class="section-title">目标进度</h2>
-              {% if goal_summary.next_goal %}
-              <div class="kpi-label" style="margin-top: 8px;">
-                目标总数：{{ goal_summary.total_count }} ｜ 进行中：{{ goal_summary.active_count }} ｜ 落后：{{ goal_summary.behind_count }}
-              </div>
-              <div class="category-list" style="margin-top: 10px;">
-                <div class="category-item">
-                  <div class="category-main">
-                    <div class="category-name">{{ goal_summary.next_goal.name }}</div>
-                    <div class="small">截止 {{ goal_summary.next_goal.deadline }} · 预期 {{ '%.2f'|format(goal_summary.next_goal.expected_progress_rate) }}%</div>
-                  </div>
-                  <div class="mono" style="text-align: right;">
-                    <div>{{ '%.2f'|format(goal_summary.next_goal.progress_rate) }}%</div>
-                    <div class="small">每月需存 ¥{{ '%.2f'|format(goal_summary.next_goal.monthly_required) }}</div>
-                  </div>
-                </div>
-              </div>
-              <div style="margin-top: 10px;"><a class="btn-secondary" href="/goals">进入目标管理</a></div>
-              {% else %}
-              <div class="helper-text">暂无目标，点击下方按钮创建第一个目标。</div>
-              <div style="margin-top: 10px;"><a class="btn-secondary" href="/goals">创建目标</a></div>
-              {% endif %}
-            </article>
-
-            <article class="panel">
-              <h2 class="section-title">类别占比</h2>
-              {% if category_share %}
-              <div style="height: 260px; margin-top: 12px;"><canvas id="categoryPieChart"></canvas></div>
-              <div class="section-insight">洞察：支出占比长期偏高的类别应优先建立子预算与提醒阈值。</div>
-              {% else %}
-              <div class="helper-text">该月份暂无类别数据。</div>
-              {% endif %}
-            </article>
-
-            <article class="panel">
-              <h2 class="section-title">本月前三类别</h2>
-              {% if top_categories %}
-              <div class="category-list" style="margin-top: 10px;">
-                {% for item in top_categories %}
-                <div class="category-item">
-                  <div class="category-main">
-                    <div class="category-name">
-                      <span class="color-dot" style="background: {{ item.color }};"></span>
-                      <span>{{ item.name }}</span>
-                    </div>
-                    <div class="progress">
-                      <span style="width: {{ item.ratio }}%; background: {{ item.color }};"></span>
-                    </div>
-                  </div>
-                  <div class="mono" style="text-align: right;">
-                    <div>¥{{ '%.2f'|format(item.amount) }}</div>
-                    <div class="small">{{ '%.2f'|format(item.ratio) }}%</div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="helper-text">暂无类别数据。</div>
-              {% endif %}
-            </article>
-
-            <article class="panel">
-              <h2 class="section-title">订阅提醒</h2>
-              <div class="kpi-label" style="margin-top: 8px;">
-                本月预计订阅成本：<span class="mono">¥{{ '%.2f'|format(subscription_metrics.estimated_monthly_cost) }}</span>
-                ｜ 本月实际订阅扣费：<span class="mono">¥{{ '%.2f'|format(subscription_metrics.actual_charged_amount) }}</span>
-                ｜ 未来 7 天：{{ subscription_summary.upcoming_count }} 项
-              </div>
-              <div class="analysis-metric-grid" style="margin-top: 10px;">
-                <div class="analysis-metric-item">
-                  <div class="small">30 天内续费</div>
-                  <div class="kpi-value mono" style="font-size: 22px;">{{ subscription_alerts.upcoming_30_days_count }}</div>
-                </div>
-                <div class="analysis-metric-item">
-                  <div class="small">订阅压力</div>
-                  <div class="kpi-value mono" style="font-size: 22px;">{{ '%.2f'|format(subscription_health.subscription_pressure) }}%</div>
-                </div>
-              </div>
-              {% if subscription_upcoming %}
-              <div class="category-list" style="margin-top: 10px;">
-                {% for item in subscription_upcoming %}
-                <div class="category-item">
-                  <div class="category-main">
-                    <div class="category-name">
-                      <span>{{ item.name }}</span>
-                    </div>
-                    <div class="small">{{ item.next_billing_date }} · {{ item.cycle }}</div>
-                  </div>
-                  <div class="mono" style="text-align: right;">
-                    <div>¥{{ '%.2f'|format(item.amount) }}</div>
-                    <div class="small">月折算 ¥{{ '%.2f'|format(item.monthly_cost) }}</div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="helper-text">未来 7 天暂无订阅扣费。</div>
-              {% endif %}
-              {% if subscription_health.cancel_candidates %}
-              <div class="small" style="margin-top: 14px;">可考虑取消</div>
-              <div class="category-list" style="margin-top: 8px;">
-                {% for item in subscription_health.cancel_candidates[:2] %}
-                <div class="category-item">
-                  <div class="category-main">
-                    <div class="category-name">{{ item.name }}</div>
-                    <div class="small">同月密集 {{ item.same_month_count }} 个 / 压力 {{ '%.2f'|format(item.pressure) }}%</div>
-                  </div>
-                  <div class="mono">楼{{ '%.2f'|format(item.monthly_cost) }}</div>
-                </div>
-                {% endfor %}
-              </div>
-              {% endif %}
-              {% if subscription_health.value_insights %}
-              <div class="section-insight">{{ subscription_health.value_insights[0] }}</div>
-              {% endif %}
-            </article>
-
-            <article class="panel">
-              <h2 class="section-title">最近记录（10 笔）</h2>
-              <div class="table-wrap" style="margin-top: 10px;">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>日期</th>
-                      <th>类型</th>
-                      <th>金额</th>
-                      <th>类别</th>
-                      <th>标签</th>
-                      <th>Reimb.</th>
-                      <th>备注</th>
-                    </tr>
-                  </thead>
-                  <tbody id="home-recent-records-body">
-                    {% if recent_records %} {% for row in recent_records %}
-                    <tr>
-                      <td>{{ row.date }}</td>
-                      <td>{{ '支出' if row.type == 'expense' else '收入' }}</td>
-                      <td class="{{ row.type }}">¥{{ '%.2f'|format(row.amount) }}</td>
-                      <td>
-                        {% if row.type == 'income' %} {{ row.category_sub if row.category_sub else '-' }} {% else %} {{
-                        row.category_main }}{% if row.category_sub %} / {{ row.category_sub }}{% endif %} {% endif %}
-                      </td>
-                      <td>{{ row.tags | join('、') if row.tags else '-' }}</td>
-                      <td>
-                        {% if row.type == 'expense' and row.reimbursement %}
-                        {{ {'pending': '待报销', 'partial': '部分报销', 'completed': '已完成'}.get(row.reimbursement.status, row.reimbursement.status) }} ·
-                        ¥{{ '%.2f'|format(row.reimbursement.reimbursed_amount or 0) }} / ¥{{ '%.2f'|format(row.reimbursement.target_amount or 0) }}
-                        {% else %}-{% endif %}
-                      </td>
-                      <td>{{ row.note if row.note else '-' }}</td>
-                    </tr>
-                    {% endfor %} {% else %}
-                    <tr>
-                      <td colspan="7">暂无记录，先记第一笔吧。</td>
-                    </tr>
-                    {% endif %}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          </div>
-        </section>
+    <article class="panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">订阅压力</h2>
+          <div class="section-desc">固定成本对本月现金流的持续占用情况。</div>
+        </div>
+        <div class="status-badge {% if home_risk_cards.subscription_pressure.risk_level == '高' %}danger{% elif home_risk_cards.subscription_pressure.risk_level == '中' %}warning{% else %}success{% endif %}" id="subscription-pressure-level">
+          {{ home_risk_cards.subscription_pressure.risk_level }}
+        </div>
       </div>
-    </main>
-    {% include '_fab_transaction.html' %}
+      <div class="grid-2" style="margin-top: 18px;">
+        <div class="summary-tile">
+          <div class="summary-tile-label">月折算成本</div>
+          <div class="summary-tile-value is-danger mono" id="subscription-pressure-cost">¥{{ '%.2f'|format(home_risk_cards.subscription_pressure.monthly_cost) }}</div>
+        </div>
+        <div class="summary-tile">
+          <div class="summary-tile-label">占总支出</div>
+          <div class="summary-tile-value mono" id="subscription-pressure-ratio">{{ '%.2f'|format(home_risk_cards.subscription_pressure.ratio) }}%</div>
+        </div>
+      </div>
+      <div class="chart-stage is-compact"><canvas id="subscriptionPressureChart"></canvas></div>
+    </article>
+  </div>
+</section>
 
-    <script id="dashboard-data" type="application/json">
-      {{ {'daily_expense': daily_expense, 'category_share': category_share, 'month': month, 'home_risk_cards': home_risk_cards} | tojson }}
-    </script>
+<section class="dashboard-lower-grid">
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">预算健康度</h2>
+        <div class="section-desc">预算执行、风险类别与月末预测。</div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top: 18px;">
+      <div class="summary-tile">
+        <div class="summary-tile-label">预算评分</div>
+        <div class="summary-tile-value mono">{{ '%.2f'|format(budget_health.score.value) }}</div>
+      </div>
+      <div class="summary-tile">
+        <div class="summary-tile-label">预测执行率</div>
+        <div class="summary-tile-value {% if home_risk_cards.budget_risk.will_overspend %}is-danger{% endif %} mono" id="budget-risk-rate">
+          {{ '%.2f'|format(home_risk_cards.budget_risk.execution_rate) }}%
+        </div>
+      </div>
+    </div>
+    <div class="chart-stage is-compact"><canvas id="budgetRiskChart"></canvas></div>
+    <div class="category-list">
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">风险类别</div>
+          <div class="small" id="budget-risk-categories">{{ home_risk_cards.budget_risk.risk_categories | join(' / ') if home_risk_cards.budget_risk.risk_categories else '暂无' }}</div>
+        </div>
+      </div>
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">月末预测</div>
+          <div class="small" id="budget-risk-forecast">
+            {{ '预计会超支' if home_risk_cards.budget_risk.will_overspend else '预计可控' }}（期末 {{ '%.2f'|format(home_risk_cards.budget_risk.projected_execution_rate) }}%）
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
 
-    <script src="{{ url_for('static', filename='js/month-switcher.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">消费健康度与风险</h2>
+        <div class="section-desc">从情绪、冲动占比与风险提示快速判断本月状态。</div>
+      </div>
+      <div class="status-badge {% if consumption_health.level in ['优秀', '良好'] %}success{% elif consumption_health.level in ['一般'] %}warning{% else %}danger{% endif %}">
+        {{ consumption_health.level or '一般' }}
+      </div>
+    </div>
+    <div class="category-list" style="margin-top: 18px;">
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">本月状态</div>
+          <div class="small">{{ emotion_light.label }} · {{ emotion_light.reason }}</div>
+        </div>
+        <span class="status-dot {{ emotion_light.level }}"></span>
+      </div>
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">冲动消费占比</div>
+          <div class="small">{{ '%.2f'|format((consumption_health.metrics.impulsive_ratio if consumption_health.metrics else 0)) }}%</div>
+        </div>
+      </div>
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">预算提示</div>
+          <div class="small">
+            {% if budget_health.risk_hints %}
+              {{ budget_health.risk_hints[0] }}
+            {% else %}
+              当前月未识别到明显预算风险类别。
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
 
-    <script>
-      const dashboardDataElement = document.getElementById("dashboard-data");
-      const dashboardData = dashboardDataElement
-        ? JSON.parse(dashboardDataElement.textContent)
-        : { daily_expense: [], category_share: [], month: "", home_risk_cards: {} };
-      const chartTheme = window.MMChartTheme;
+<section class="grid-2">
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">综合洞察</h2>
+        <div class="section-desc">把本月最重要的结论压缩到一个决策卡片里。</div>
+      </div>
+    </div>
+    <div class="review-note-list" style="margin-top: 18px;">
+      <div class="review-note">本月净支出为 ¥{{ '%.2f'|format(summary.net_expense or summary.gross_expense) }}，结余为 ¥{{ '%.2f'|format(summary.balance) }}。</div>
+      <div class="review-note">预算健康度 {{ budget_health.score.level }}，执行率 {{ '%.2f'|format(budget_health.score.execution_rate) }}%，{% if home_risk_cards.budget_risk.will_overspend %}需要关注月末超支风险。{% else %}当前节奏整体可控。{% endif %}</div>
+      <div class="review-note">订阅月折算成本 ¥{{ '%.2f'|format(home_risk_cards.subscription_pressure.monthly_cost) }}，占总支出 {{ '%.2f'|format(home_risk_cards.subscription_pressure.ratio) }}%。</div>
+    </div>
+  </article>
 
-      const dailyExpense = dashboardData.daily_expense || [];
-      const categoryShare = dashboardData.category_share || [];
-      let subscriptionPressureChartInstance = null;
-      let budgetRiskChartInstance = null;
+  <article class="panel">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">重点类别与目标</h2>
+        <div class="section-desc">高占比类别、进行中的目标与近期提醒。</div>
+      </div>
+    </div>
+    {% if top_categories %}
+    <div class="category-list" style="margin-top: 18px;">
+      {% for item in top_categories[:3] %}
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">
+            <span class="color-dot" style="background: {{ item.color }};"></span>
+            <span>{{ item.name }}</span>
+          </div>
+          <div class="progress"><span style="width: {{ item.ratio }}%; background: {{ item.color }};"></span></div>
+        </div>
+        <div class="mono">
+          <div>¥{{ '%.2f'|format(item.amount) }}</div>
+          <div class="small">{{ '%.2f'|format(item.ratio) }}%</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="helper-text" style="margin-top: 18px;">暂无类别数据。</div>
+    {% endif %}
 
-      function renderRiskCardCharts(riskCards) {
-        const subscription = (riskCards && riskCards.subscription_pressure) || {};
-        const budget = (riskCards && riskCards.budget_risk) || {};
+    <div class="category-list" style="margin-top: 18px;">
+      <div class="category-item">
+        <div class="category-main">
+          <div class="category-name">目标进度</div>
+          <div class="small">
+            {% if goal_summary.next_goal %}
+            {{ goal_summary.next_goal.name }} · 截止 {{ goal_summary.next_goal.deadline }}
+            {% else %}
+            暂无目标，建议创建一个储蓄目标。
+            {% endif %}
+          </div>
+        </div>
+        <div class="mono">
+          {% if goal_summary.next_goal %}
+          {{ '%.2f'|format(goal_summary.next_goal.progress_rate) }}%
+          {% else %}
+          --
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
 
-        const ratio = Number(subscription.ratio || 0);
-        const ratioClamped = Math.max(0, Math.min(100, ratio));
-        const executionRate = Number(budget.execution_rate || 0);
-        const executionClamped = Math.max(0, Math.min(100, executionRate));
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">最近记录</h2>
+      <div class="section-desc">保留最近 10 笔明细，方便快速校验和补录。</div>
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-top: 18px;">
+    <table>
+      <thead>
+        <tr>
+          <th>日期</th>
+          <th>类型</th>
+          <th>金额</th>
+          <th>类别</th>
+          <th>标签</th>
+          <th>报销状态</th>
+          <th>备注</th>
+        </tr>
+      </thead>
+      <tbody id="home-recent-records-body">
+        {% if recent_records %}
+          {% for row in recent_records %}
+          <tr>
+            <td>{{ row.date }}</td>
+            <td>{{ '支出' if row.type == 'expense' else '收入' }}</td>
+            <td class="{{ row.type }}">¥{{ '%.2f'|format(row.amount) }}</td>
+            <td>
+              {% if row.type == 'income' %}
+                {{ row.category_sub if row.category_sub else '-' }}
+              {% else %}
+                {{ row.category_main }}{% if row.category_sub %} / {{ row.category_sub }}{% endif %}
+              {% endif %}
+            </td>
+            <td>{{ row.tags | join('、') if row.tags else '-' }}</td>
+            <td>
+              {% if row.type == 'expense' and row.reimbursement %}
+                {{ {'pending': '待报销', 'partial': '部分报销', 'completed': '已完成'}.get(row.reimbursement.status, row.reimbursement.status) }} ·
+                ¥{{ '%.2f'|format(row.reimbursement.reimbursed_amount or 0) }} / ¥{{ '%.2f'|format(row.reimbursement.target_amount or 0) }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>{{ row.note if row.note else '-' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="7">暂无记录，先记第一笔吧。</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
 
-        const subscriptionCanvas = document.getElementById("subscriptionPressureChart");
-        if (subscriptionCanvas) {
-          if (subscriptionPressureChartInstance) {
-            subscriptionPressureChartInstance.destroy();
-          }
-          subscriptionPressureChartInstance = new Chart(subscriptionCanvas, {
-            type: "doughnut",
-            data: {
-              labels: ["订阅占比", "其他支出"],
-              datasets: [
-                {
-                  data: [ratioClamped, Math.max(0, 100 - ratioClamped)],
-                  borderWidth: 0,
-                  backgroundColor: ["#0EA5E9", chartTheme.alpha("#64748B", 0.24)],
-                },
-              ],
+{% block base_scripts %}
+<script src="{{ url_for('static', filename='js/chart-theme.js') }}"></script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script id="dashboard-data" type="application/json">
+  {{ {'daily_expense': daily_expense, 'category_share': category_share, 'month': month, 'home_risk_cards': home_risk_cards} | tojson }}
+</script>
+<script>
+  const dashboardDataElement = document.getElementById("dashboard-data");
+  const dashboardData = dashboardDataElement
+    ? JSON.parse(dashboardDataElement.textContent)
+    : { daily_expense: [], category_share: [], month: "", home_risk_cards: {} };
+  const chartTheme = window.MMChartTheme;
+
+  const dailyExpense = dashboardData.daily_expense || [];
+  const categoryShare = dashboardData.category_share || [];
+  let subscriptionPressureChartInstance = null;
+  let budgetRiskChartInstance = null;
+
+  function renderRiskCardCharts(riskCards) {
+    const subscription = (riskCards && riskCards.subscription_pressure) || {};
+    const budget = (riskCards && riskCards.budget_risk) || {};
+
+    const ratio = Number(subscription.ratio || 0);
+    const ratioClamped = Math.max(0, Math.min(100, ratio));
+    const executionRate = Number(budget.execution_rate || 0);
+    const executionClamped = Math.max(0, Math.min(100, executionRate));
+
+    const subscriptionCanvas = document.getElementById("subscriptionPressureChart");
+    if (subscriptionCanvas) {
+      if (subscriptionPressureChartInstance) {
+        subscriptionPressureChartInstance.destroy();
+      }
+      subscriptionPressureChartInstance = new Chart(subscriptionCanvas, {
+        type: "doughnut",
+        data: {
+          labels: ["订阅占比", "其他支出"],
+          datasets: [
+            {
+              data: [ratioClamped, Math.max(0, 100 - ratioClamped)],
+              borderWidth: 0,
+              backgroundColor: [chartTheme.palette[2], chartTheme.alpha("#94A3B8", 0.22)],
             },
-            options: {
-              ...chartTheme.pieOptions(),
-              cutout: "68%",
+          ],
+        },
+        options: {
+          ...chartTheme.pieOptions(),
+          cutout: "72%",
+        },
+      });
+    }
+
+    const budgetCanvas = document.getElementById("budgetRiskChart");
+    if (budgetCanvas) {
+      if (budgetRiskChartInstance) {
+        budgetRiskChartInstance.destroy();
+      }
+      const budgetColor = executionRate >= 100 ? "#EF4444" : executionRate >= 85 ? "#F59E0B" : "#10B981";
+      budgetRiskChartInstance = new Chart(budgetCanvas, {
+        type: "doughnut",
+        data: {
+          labels: ["预算执行", "预算余量"],
+          datasets: [
+            {
+              data: [executionClamped, Math.max(0, 100 - executionClamped)],
+              borderWidth: 0,
+              backgroundColor: [budgetColor, chartTheme.alpha("#94A3B8", 0.22)],
             },
-          });
-        }
+          ],
+        },
+        options: {
+          ...chartTheme.pieOptions(),
+          cutout: "72%",
+        },
+      });
+    }
+  }
 
-        const budgetCanvas = document.getElementById("budgetRiskChart");
-        if (budgetCanvas) {
-          if (budgetRiskChartInstance) {
-            budgetRiskChartInstance.destroy();
-          }
-          const budgetColor = executionRate >= 100 ? "#EF4444" : executionRate >= 85 ? "#F59E0B" : "#22C55E";
-          budgetRiskChartInstance = new Chart(budgetCanvas, {
-            type: "doughnut",
-            data: {
-              labels: ["预算执行", "预算余量"],
-              datasets: [
-                {
-                  data: [executionClamped, Math.max(0, 100 - executionClamped)],
-                  borderWidth: 0,
-                  backgroundColor: [budgetColor, chartTheme.alpha("#64748B", 0.24)],
-                },
-              ],
-            },
-            options: {
-              ...chartTheme.pieOptions(),
-              cutout: "68%",
-            },
-          });
-        }
+  function updateRiskCardText(riskCards) {
+    const subscription = (riskCards && riskCards.subscription_pressure) || {};
+    const budget = (riskCards && riskCards.budget_risk) || {};
+
+    const costElement = document.getElementById("subscription-pressure-cost");
+    const ratioElement = document.getElementById("subscription-pressure-ratio");
+    const levelElement = document.getElementById("subscription-pressure-level");
+    const executionElement = document.getElementById("budget-risk-rate");
+    const categoriesElement = document.getElementById("budget-risk-categories");
+    const forecastElement = document.getElementById("budget-risk-forecast");
+
+    if (costElement) {
+      costElement.textContent = `¥${Number(subscription.monthly_cost || 0).toFixed(2)}`;
+    }
+    if (ratioElement) {
+      ratioElement.textContent = `${Number(subscription.ratio || 0).toFixed(2)}%`;
+    }
+    if (levelElement) {
+      levelElement.textContent = subscription.risk_level || "低";
+      levelElement.className = `status-badge ${subscription.risk_level === "高" ? "danger" : subscription.risk_level === "中" ? "warning" : "success"}`;
+    }
+    if (executionElement) {
+      executionElement.textContent = `${Number(budget.execution_rate || 0).toFixed(2)}%`;
+    }
+    if (categoriesElement) {
+      const categories = Array.isArray(budget.risk_categories) ? budget.risk_categories : [];
+      categoriesElement.textContent = categories.length ? categories.join(" / ") : "暂无";
+    }
+    if (forecastElement) {
+      const projected = Number(budget.projected_execution_rate || 0).toFixed(2);
+      forecastElement.textContent = `${budget.will_overspend ? "预计会超支" : "预计可控"}（期末 ${projected}%）`;
+    }
+  }
+
+  async function refreshRiskCards(month) {
+    if (!month) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/dashboard/risk-cards?month=${encodeURIComponent(month)}`);
+      if (!response.ok) {
+        return;
       }
-
-      function updateRiskCardText(riskCards) {
-        const subscription = (riskCards && riskCards.subscription_pressure) || {};
-        const budget = (riskCards && riskCards.budget_risk) || {};
-
-        const costElement = document.getElementById("subscription-pressure-cost");
-        const ratioElement = document.getElementById("subscription-pressure-ratio");
-        const levelElement = document.getElementById("subscription-pressure-level");
-        const executionElement = document.getElementById("budget-risk-rate");
-        const categoriesElement = document.getElementById("budget-risk-categories");
-        const forecastElement = document.getElementById("budget-risk-forecast");
-
-        if (costElement) {
-          costElement.textContent = `¥${Number(subscription.monthly_cost || 0).toFixed(2)}`;
-        }
-        if (ratioElement) {
-          ratioElement.textContent = `占本月总支出 ${Number(subscription.ratio || 0).toFixed(2)}%`;
-        }
-        if (levelElement) {
-          levelElement.textContent = `风险等级：${subscription.risk_level || "低"}`;
-        }
-
-        if (executionElement) {
-          executionElement.textContent = `执行率 ${Number(budget.execution_rate || 0).toFixed(2)}%`;
-        }
-        if (categoriesElement) {
-          const categories = Array.isArray(budget.risk_categories) ? budget.risk_categories : [];
-          categoriesElement.textContent = `风险类别：${categories.length ? categories.join(" / ") : "暂无"}`;
-        }
-        if (forecastElement) {
-          const projected = Number(budget.projected_execution_rate || 0).toFixed(2);
-          const text = budget.will_overspend ? "预计会超支" : "预计可控";
-          forecastElement.textContent = `预测：${text}（期末 ${projected}%）`;
-        }
-      }
-
-      async function refreshRiskCards(month) {
-        if (!month) {
-          return;
-        }
-
-        try {
-          const response = await fetch(`/api/dashboard/risk-cards?month=${encodeURIComponent(month)}`);
-          if (!response.ok) {
-            return;
-          }
-          const riskCards = await response.json();
-          updateRiskCardText(riskCards);
-          renderRiskCardCharts(riskCards);
-        } catch (_error) {
-          updateRiskCardText(dashboardData.home_risk_cards || {});
-          renderRiskCardCharts(dashboardData.home_risk_cards || {});
-        }
-      }
-
-      if (dailyExpense.length > 0) {
-        const dailyCtx = document.getElementById("dailyExpenseChart");
-        new Chart(dailyCtx, {
-          type: "line",
-          data: {
-            labels: dailyExpense.map((item) => item.date),
-            datasets: [
-              {
-                label: "每日支出",
-                data: dailyExpense.map((item) => item.amount),
-                borderColor: "#2563EB",
-                backgroundColor: chartTheme.alpha("#2563EB", 0.16),
-                pointRadius: 2,
-                pointHoverRadius: 4,
-                borderWidth: 2.2,
-                tension: 0.36,
-                fill: true,
-              },
-            ],
-          },
-          options: chartTheme.lineOptions(),
-        });
-      }
-
-      if (categoryShare.length > 0) {
-        const pieCtx = document.getElementById("categoryPieChart");
-        new Chart(pieCtx, {
-          type: "pie",
-          data: {
-            labels: categoryShare.map((item) => item.category),
-            datasets: [
-              {
-                data: categoryShare.map((item) => item.amount),
-                borderWidth: 0,
-                backgroundColor: chartTheme.buildPalette(Math.max(categoryShare.length, 8)),
-              },
-            ],
-          },
-          options: chartTheme.pieOptions(),
-        });
-      }
-
+      const riskCards = await response.json();
+      updateRiskCardText(riskCards);
+      renderRiskCardCharts(riskCards);
+    } catch (_error) {
       updateRiskCardText(dashboardData.home_risk_cards || {});
       renderRiskCardCharts(dashboardData.home_risk_cards || {});
-      refreshRiskCards(dashboardData.month || "");
-    </script>
-    <script src="{{ url_for('static', filename='js/fab.js') }}"></script>
-  </body>
-</html>
+    }
+  }
+
+  if (dailyExpense.length > 0) {
+    const dailyCtx = document.getElementById("dailyExpenseChart");
+    new Chart(dailyCtx, {
+      type: "line",
+      data: {
+        labels: dailyExpense.map((item) => item.date),
+        datasets: [
+          {
+            label: "每日支出",
+            data: dailyExpense.map((item) => item.amount),
+            borderColor: "#4F46E5",
+            backgroundColor: chartTheme.alpha("#4F46E5", 0.14),
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            borderWidth: 2.4,
+            tension: 0.38,
+            fill: true,
+          },
+        ],
+      },
+      options: chartTheme.lineOptions(),
+    });
+  }
+
+  if (categoryShare.length > 0) {
+    const pieCtx = document.getElementById("categoryPieChart");
+    new Chart(pieCtx, {
+      type: "doughnut",
+      data: {
+        labels: categoryShare.map((item) => item.category),
+        datasets: [
+          {
+            data: categoryShare.map((item) => item.amount),
+            borderWidth: 0,
+            backgroundColor: chartTheme.buildPalette(Math.max(categoryShare.length, 6)),
+          },
+        ],
+      },
+      options: {
+        ...chartTheme.pieOptions(),
+        cutout: "64%",
+      },
+    });
+  }
+
+  updateRiskCardText(dashboardData.home_risk_cards || {});
+  renderRiskCardCharts(dashboardData.home_risk_cards || {});
+  refreshRiskCards(dashboardData.month || "");
+</script>
+{% endblock %}
