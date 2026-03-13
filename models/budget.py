@@ -37,6 +37,30 @@ def upsert_budget(month: str, category_main: str | None, budget_amount: float) -
         return int(last_row_id)
 
 
+def delete_budget(budget_id: int) -> bool:
+    with get_connection() as conn:
+        budget = conn.execute(
+            """
+            SELECT id
+            FROM budgets
+            WHERE id = ?
+            """,
+            (budget_id,),
+        ).fetchone()
+        if budget is None:
+            return False
+
+        conn.execute(
+            """
+            DELETE FROM budgets
+            WHERE id = ?
+            """,
+            (budget_id,),
+        )
+        conn.commit()
+        return True
+
+
 def get_budget_execution(month: str) -> dict:
     with get_connection() as conn:
         budget_rows = conn.execute(

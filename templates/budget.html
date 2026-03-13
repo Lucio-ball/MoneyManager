@@ -22,6 +22,10 @@
 <section class="panel"><p class="msg ok">预算已保存。</p></section>
 {% elif success == '0' %}
 <section class="panel"><p class="msg danger">保存失败：请填写有效预算金额。</p></section>
+{% elif deleted == '1' %}
+<section class="panel"><p class="msg ok">预算已删除。</p></section>
+{% elif deleted == '0' %}
+<section class="panel"><p class="msg danger">删除失败：预算不存在或已被删除。</p></section>
 {% endif %}
 
 <section class="form-shell">
@@ -111,6 +115,7 @@
           <th>待报销</th>
           <th>执行率</th>
           <th>状态</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -129,6 +134,12 @@
             {% else %}
             <span class="badge danger">超支</span>
             {% endif %}
+          </td>
+          <td>
+            <div class="budget-actions">
+              <button class="btn-secondary budget-action-btn budget-edit-btn" type="button" data-category="{{ item.category_main or '' }}" data-amount="{{ item.budget_amount }}">✏ 编辑</button>
+              <button class="btn-secondary budget-action-btn budget-delete-btn" type="button" data-id="{{ item.id }}">🗑 删除</button>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -198,4 +209,52 @@
     {% endif %}
   </article>
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (() => {
+    const month = {{ month|tojson }};
+    const categorySelect = document.querySelector('select[name="category_main"]');
+    const amountInput = document.querySelector('input[name="budget_amount"]');
+
+    document.querySelectorAll('.budget-edit-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (categorySelect) {
+          categorySelect.value = button.dataset.category || '';
+        }
+        if (amountInput) {
+          amountInput.value = button.dataset.amount || '';
+          amountInput.focus();
+        }
+      });
+    });
+
+    document.querySelectorAll('.budget-delete-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const confirmed = window.confirm('确认删除该预算？\n\n删除预算不会删除历史交易记录。');
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/budget/${button.dataset.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error('delete failed');
+          }
+
+          window.location.href = `/budget?month=${encodeURIComponent(month)}&deleted=1`;
+        } catch (error) {
+          window.location.href = `/budget?month=${encodeURIComponent(month)}&deleted=0`;
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}

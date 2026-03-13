@@ -672,6 +672,20 @@ textarea:focus {
   border-radius: 16px;
 }
 
+.budget-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.budget-action-btn {
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

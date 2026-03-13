@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
 from config import CATEGORY_OPTIONS
-from services.budget_service import get_budget_execution, get_budget_health_profile, upsert_budget
+from services.budget_service import delete_budget, get_budget_execution, get_budget_health_profile, upsert_budget
 from utils.date_utils import normalize_month
 
 bp = Blueprint("budget_routes", __name__)
@@ -21,6 +21,7 @@ def budget_page():
         return redirect(url_for("budget_routes.budget_page", month=budget_month, success="0"))
 
     success = request.args.get("success")
+    deleted = request.args.get("deleted")
     budget_data = get_budget_execution(month)
     budget_health = get_budget_health_profile(month)
     return render_template(
@@ -28,6 +29,7 @@ def budget_page():
         active_page="budget",
         month=month,
         success=success,
+        deleted=deleted,
         category_options=CATEGORY_OPTIONS,
         budget_data=budget_data,
         budget_health=budget_health,
@@ -68,3 +70,11 @@ def list_budget_api():
 def budget_health_api():
     month = normalize_month(request.args.get("month"))
     return jsonify(get_budget_health_profile(month))
+
+
+@bp.route("/budget/<int:budget_id>", methods=["DELETE"], endpoint="delete_budget_api")
+def delete_budget_api(budget_id: int):
+    deleted = delete_budget(budget_id)
+    if not deleted:
+        return jsonify({"error": "budget not found"}), 404
+    return jsonify({"success": True})
