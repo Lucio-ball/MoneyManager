@@ -7,6 +7,7 @@ from models.transaction import (
     get_calendar_daily_expense,
     get_calendar_day_details,
     create_transaction,
+    delete_transaction,
     get_category_trend,
     get_monthly_dashboard_data,
     get_monthly_financial_summary,
@@ -15,7 +16,10 @@ from models.transaction import (
     get_recent_transactions,
     get_tag_trend,
     get_today_expense,
+    get_transaction_by_id,
     get_transactions_by_month,
+    query_transactions,
+    update_transaction,
 )
 
 
@@ -270,4 +274,8 @@ __all__ = [
     "get_recent_average_month_expense",
     "get_calendar_daily_expense",
     "get_calendar_day_details",
+    "query_transactions",
+    "get_transaction_by_id",
+    "update_transaction",
+    "delete_transaction",
 ]

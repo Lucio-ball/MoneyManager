@@ -52,6 +52,343 @@ def create_transaction(transaction: dict) -> int:
         return int(last_row_id)
 
 
+def _map_transaction_row(row) -> dict:
+    item = dict(row)
+    item["amount"] = float(item["amount"])
+    item["tags"] = parse_tags(item.get("tags"))
+    return item
+
+
+def _get_reimbursement_marker_id(conn, expense_transaction_id: int) -> int | None:
+    row = conn.execute(
+        """
+        SELECT id
+        FROM reimbursement_links
+        WHERE expense_transaction_id = ?
+          AND reimbursement_transaction_id IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (expense_transaction_id,),
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
+def _sync_expense_reimbursement_status(conn, expense_transaction_id: int) -> None:
+    marker_id = _get_reimbursement_marker_id(conn, expense_transaction_id)
+    if marker_id is None:
+        return
+
+    marker_row = conn.execute(
+        """
+        SELECT amount
+        FROM reimbursement_links
+        WHERE id = ?
+        """,
+        (marker_id,),
+    ).fetchone()
+    if marker_row is None:
+        return
+
+    target_amount = round(float(marker_row["amount"] or 0), 2)
+    linked_row = conn.execute(
+        """
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM reimbursement_links
+        WHERE expense_transaction_id = ?
+          AND reimbursement_transaction_id IS NOT NULL
+        """,
+        (expense_transaction_id,),
+    ).fetchone()
+    reimbursed_amount = round(float(linked_row["total"] or 0), 2)
+
+    if reimbursed_amount <= 0:
+        status = "pending"
+    elif reimbursed_amount + 0.005 >= target_amount:
+        status = "completed"
+    else:
+        status = "partial"
+
+    conn.execute(
+        """
+        UPDATE reimbursement_links
+        SET status = ?
+        WHERE id = ?
+        """,
+        (status, marker_id),
+    )
+
+
+def get_transaction_by_id(transaction_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                amount,
+                type,
+                date,
+                category_main,
+                category_sub,
+                tags,
+                note,
+                created_at
+            FROM transactions
+            WHERE id = ?
+            """,
+            (transaction_id,),
+        ).fetchone()
+
+    if not row:
+        return None
+    return _attach_reimbursement_fields([_map_transaction_row(row)])[0]
+
+
+def query_transactions(
+    page: int = 1,
+    per_page: int = 20,
+    keyword: str | None = None,
+    category: str | None = None,
+    transaction_type: str | None = None,
+    date_range: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+) -> dict:
+    page = max(int(page or 1), 1)
+    per_page = max(int(per_page or 20), 1)
+    offset = (page - 1) * per_page
+
+    where_clauses: list[str] = []
+    params: list = []
+
+    keyword_value = str(keyword or "").strip()
+    if keyword_value:
+        like_value = f"%{keyword_value}%"
+        where_clauses.append(
+            """
+            (
+                COALESCE(category_main, '') LIKE ?
+                OR COALESCE(category_sub, '') LIKE ?
+                OR COALESCE(tags, '') LIKE ?
+                OR COALESCE(note, '') LIKE ?
+            )
+            """
+        )
+        params.extend([like_value, like_value, like_value, like_value])
+
+    category_value = str(category or "").strip()
+    if category_value:
+        where_clauses.append("category_main = ?")
+        params.append(category_value)
+
+    type_value = str(transaction_type or "").strip()
+    if type_value in {"income", "expense"}:
+        where_clauses.append("type = ?")
+        params.append(type_value)
+    else:
+        type_value = ""
+
+    start_date = ""
+    end_date = ""
+    date_range_value = str(date_range or "").strip()
+    if date_range_value:
+        parts = [part.strip() for part in date_range_value.split(",", 1)]
+        if parts and parts[0]:
+            start_date = parts[0]
+            where_clauses.append("date >= ?")
+            params.append(start_date)
+        if len(parts) > 1 and parts[1]:
+            end_date = parts[1]
+            where_clauses.append("date <= ?")
+            params.append(end_date)
+
+    min_amount_value = None
+    if min_amount not in (None, ""):
+        min_amount_value = float(min_amount)
+        where_clauses.append("amount >= ?")
+        params.append(min_amount_value)
+
+    max_amount_value = None
+    if max_amount not in (None, ""):
+        max_amount_value = float(max_amount)
+        where_clauses.append("amount <= ?")
+        params.append(max_amount_value)
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    with get_connection() as conn:
+        total_row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM transactions
+            {where_sql}
+            """,
+            tuple(params),
+        ).fetchone()
+        rows = conn.execute(
+            f"""
+            SELECT
+                id,
+                amount,
+                type,
+                date,
+                category_main,
+                category_sub,
+                tags,
+                note,
+                created_at
+            FROM transactions
+            {where_sql}
+            ORDER BY date DESC, id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, per_page, offset),
+        ).fetchall()
+
+    total = int(total_row["total"] or 0)
+    records = _attach_reimbursement_fields([_map_transaction_row(row) for row in rows])
+    total_pages = max((total + per_page - 1) // per_page, 1)
+
+    return {
+        "items": records,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        },
+        "filters": {
+            "keyword": keyword_value,
+            "category": category_value,
+            "type": type_value,
+            "date_range": date_range_value,
+            "start_date": start_date,
+            "end_date": end_date,
+            "min_amount": min_amount_value,
+            "max_amount": max_amount_value,
+        },
+    }
+
+
+def update_transaction(transaction_id: int, transaction: dict) -> bool:
+    existing = get_transaction_by_id(transaction_id)
+    if not existing:
+        return False
+
+    tags_json = json.dumps(transaction.get("tags", []), ensure_ascii=False)
+    old_type = str(existing.get("type") or "").strip()
+    new_type = str(transaction.get("type") or "").strip()
+    old_income_source = str(existing.get("category_sub") or "").strip()
+    new_income_source = str(transaction.get("category_sub") or "").strip()
+
+    with get_connection() as conn:
+        linked_expense_rows = conn.execute(
+            """
+            SELECT DISTINCT expense_transaction_id
+            FROM reimbursement_links
+            WHERE reimbursement_transaction_id = ?
+            """,
+            (transaction_id,),
+        ).fetchall()
+        linked_expense_ids = [int(row["expense_transaction_id"]) for row in linked_expense_rows]
+
+        conn.execute(
+            """
+            UPDATE transactions
+            SET amount = ?, type = ?, date = ?, category_main = ?, category_sub = ?, tags = ?, note = ?
+            WHERE id = ?
+            """,
+            (
+                float(transaction["amount"]),
+                transaction["type"],
+                transaction["date"],
+                transaction["category_main"],
+                transaction.get("category_sub") or None,
+                tags_json,
+                transaction.get("note") or None,
+                transaction_id,
+            ),
+        )
+
+        if old_type != new_type:
+            conn.execute(
+                """
+                DELETE FROM reimbursement_links
+                WHERE expense_transaction_id = ?
+                   OR reimbursement_transaction_id = ?
+                """,
+                (transaction_id, transaction_id),
+            )
+            for expense_id in linked_expense_ids:
+                _sync_expense_reimbursement_status(conn, expense_id)
+        elif new_type == "income" and old_income_source == REIMBURSEMENT_CATEGORY and new_income_source != REIMBURSEMENT_CATEGORY:
+            conn.execute(
+                """
+                DELETE FROM reimbursement_links
+                WHERE reimbursement_transaction_id = ?
+                """,
+                (transaction_id,),
+            )
+            for expense_id in linked_expense_ids:
+                _sync_expense_reimbursement_status(conn, expense_id)
+        elif new_type == "expense":
+            marker_id = _get_reimbursement_marker_id(conn, transaction_id)
+            if marker_id is not None:
+                conn.execute(
+                    """
+                    UPDATE reimbursement_links
+                    SET amount = MIN(amount, ?)
+                    WHERE id = ?
+                    """,
+                    (float(transaction["amount"]), marker_id),
+                )
+                _sync_expense_reimbursement_status(conn, transaction_id)
+
+        conn.commit()
+        return True
+
+
+def delete_transaction(transaction_id: int) -> bool:
+    existing = get_transaction_by_id(transaction_id)
+    if not existing:
+        return False
+
+    with get_connection() as conn:
+        linked_expense_rows = conn.execute(
+            """
+            SELECT DISTINCT expense_transaction_id
+            FROM reimbursement_links
+            WHERE reimbursement_transaction_id = ?
+            """,
+            (transaction_id,),
+        ).fetchall()
+        linked_expense_ids = [int(row["expense_transaction_id"]) for row in linked_expense_rows]
+
+        conn.execute(
+            """
+            DELETE FROM reimbursement_links
+            WHERE expense_transaction_id = ?
+               OR reimbursement_transaction_id = ?
+            """,
+            (transaction_id, transaction_id),
+        )
+        conn.execute(
+            """
+            DELETE FROM transactions
+            WHERE id = ?
+            """,
+            (transaction_id,),
+        )
+
+        for expense_id in linked_expense_ids:
+            _sync_expense_reimbursement_status(conn, expense_id)
+
+        conn.commit()
+        return True
+
+
 def _attach_reimbursement_fields(records: list[dict]) -> list[dict]:
     expense_ids = [int(item["id"]) for item in records if item.get("type") == "expense"]
     reimbursement_map = get_expense_reimbursement_map(expense_ids)
@@ -99,13 +436,7 @@ def get_recent_transactions(limit: int = 10) -> list[dict]:
             (limit,),
         ).fetchall()
 
-    result = []
-    for row in rows:
-        item = dict(row)
-        item["amount"] = float(item["amount"])
-        item["tags"] = parse_tags(item.get("tags"))
-        result.append(item)
-    return _attach_reimbursement_fields(result)
+    return _attach_reimbursement_fields([_map_transaction_row(row) for row in rows])
 
 
 def get_monthly_financial_summary(month: str) -> dict:
@@ -205,13 +536,7 @@ def get_transactions_by_month(month: str) -> list[dict]:
             (month,),
         ).fetchall()
 
-    records: list[dict] = []
-    for row in rows:
-        item = dict(row)
-        item["amount"] = float(item["amount"])
-        item["tags"] = parse_tags(item.get("tags"))
-        records.append(item)
-    return _attach_reimbursement_fields(records)
+    return _attach_reimbursement_fields([_map_transaction_row(row) for row in rows])
 
 
 def get_monthly_stats(month: str) -> dict:
@@ -615,5 +940,4 @@ def get_calendar_day_details(target_date: str) -> dict:
         "grouped_transactions": grouped_transactions,
         "transactions": transactions,
     }
-
 

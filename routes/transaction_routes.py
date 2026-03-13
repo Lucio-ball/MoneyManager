@@ -1,7 +1,9 @@
 from datetime import date, datetime
+from urllib.parse import urlencode
 
 from flask import Blueprint, jsonify, render_template, request
 
+from config import CATEGORY_OPTIONS, TAG_OPTIONS
 from models.reimbursement import (
     get_month_reimbursement_progress,
     link_reimbursement_to_expense,
@@ -31,9 +33,13 @@ from services.transaction_service import (
     get_recent_transactions,
     get_tag_trend,
     get_today_expense,
+    get_transaction_by_id,
     get_transactions_by_month,
     normalize_transaction_payload,
+    query_transactions,
     suggest_reimbursement_matches,
+    update_transaction,
+    delete_transaction,
 )
 from utils.date_utils import normalize_month
 from utils.risk_utils import build_emotion_light
@@ -43,6 +49,28 @@ bp = Blueprint("transaction_routes", __name__)
 
 def _parse_bool(value) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_float_arg(value):
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_transaction_page_link(page: int, filters: dict) -> str:
+    query = {
+        "page": page,
+        "keyword": filters.get("keyword") or "",
+        "category": filters.get("category") or "",
+        "type": filters.get("type") or "",
+        "date_range": filters.get("date_range") or "",
+        "min_amount": filters.get("min_amount") if filters.get("min_amount") is not None else "",
+        "max_amount": filters.get("max_amount") if filters.get("max_amount") is not None else "",
+    }
+    return f"/transactions?{urlencode(query)}"
 
 
 @bp.route("/", endpoint="index")
@@ -112,6 +140,42 @@ def calendar_page():
         "calendar.html",
         active_page="calendar",
         month=month,
+    )
+
+
+@bp.route("/transactions", methods=["GET"], endpoint="transactions_page")
+def transactions_page():
+    page = request.args.get("page", default=1, type=int) or 1
+    keyword = request.args.get("keyword", "")
+    category = request.args.get("category", "")
+    transaction_type = request.args.get("type", "")
+    date_range = request.args.get("date_range", "")
+    min_amount = _parse_float_arg(request.args.get("min_amount"))
+    max_amount = _parse_float_arg(request.args.get("max_amount"))
+
+    result = query_transactions(
+        page=page,
+        per_page=20,
+        keyword=keyword,
+        category=category,
+        transaction_type=transaction_type,
+        date_range=date_range,
+        min_amount=min_amount,
+        max_amount=max_amount,
+    )
+    pagination = result["pagination"]
+    filters = result["filters"]
+
+    return render_template(
+        "transactions.html",
+        active_page="transactions",
+        category_options=CATEGORY_OPTIONS,
+        tag_options=TAG_OPTIONS,
+        transactions_result=result,
+        pagination_links={
+            "prev": _build_transaction_page_link(pagination["page"] - 1, filters) if pagination["has_prev"] else None,
+            "next": _build_transaction_page_link(pagination["page"] + 1, filters) if pagination["has_next"] else None,
+        },
     )
 
 
@@ -191,8 +255,58 @@ def create_transaction_api():
 
 @bp.route("/api/transactions", methods=["GET"], endpoint="list_transactions_api")
 def list_transactions_api():
+    has_center_query = any(
+        request.args.get(key) not in (None, "")
+        for key in ("page", "keyword", "category", "type", "date_range", "min_amount", "max_amount")
+    )
+    if has_center_query:
+        result = query_transactions(
+            page=request.args.get("page", default=1, type=int) or 1,
+            per_page=20,
+            keyword=request.args.get("keyword", ""),
+            category=request.args.get("category", ""),
+            transaction_type=request.args.get("type", ""),
+            date_range=request.args.get("date_range", ""),
+            min_amount=_parse_float_arg(request.args.get("min_amount")),
+            max_amount=_parse_float_arg(request.args.get("max_amount")),
+        )
+        return jsonify(result)
+
     month = normalize_month(request.args.get("month"))
     return jsonify(get_transactions_by_month(month))
+
+
+@bp.route("/api/transactions/<int:transaction_id>", methods=["GET"], endpoint="get_transaction_api")
+def get_transaction_api(transaction_id: int):
+    record = get_transaction_by_id(transaction_id)
+    if not record:
+        return jsonify({"error": "transaction not found"}), 404
+    return jsonify(record)
+
+
+@bp.route("/api/transactions/<int:transaction_id>", methods=["PUT"], endpoint="update_transaction_api")
+def update_transaction_api(transaction_id: int):
+    payload = request.get_json(silent=True) or {}
+    tags = payload.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+
+    transaction_data, error = normalize_transaction_payload(payload, tags)
+    if not transaction_data:
+        return jsonify({"error": error or "invalid payload"}), 400
+
+    updated = update_transaction(transaction_id, transaction_data)
+    if not updated:
+        return jsonify({"error": "transaction not found"}), 404
+    return jsonify({"success": True})
+
+
+@bp.route("/api/transactions/<int:transaction_id>", methods=["DELETE"], endpoint="delete_transaction_api")
+def delete_transaction_api(transaction_id: int):
+    deleted = delete_transaction(transaction_id)
+    if not deleted:
+        return jsonify({"error": "transaction not found"}), 404
+    return jsonify({"success": True})
 
 
 @bp.route("/api/reimbursements/open-expenses", methods=["GET"], endpoint="open_reimbursable_expenses_api")

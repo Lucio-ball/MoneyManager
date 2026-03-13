@@ -1,0 +1,410 @@
+{% extends 'base.html' %}
+
+{% block title %}MoneyManager · 交易管理{% endblock %}
+
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-copy">
+    <div class="page-eyebrow">Transaction Center</div>
+    <h1 class="page-title">交易管理</h1>
+    <div class="page-subtitle">管理和修改你的历史财务记录。</div>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">筛选工具</h2>
+      <div class="section-desc">按关键词、类别、类型、时间范围和金额快速定位记录。</div>
+    </div>
+  </div>
+  <form method="get" action="/transactions" class="form-grid" id="transaction-filter-form" style="margin-top: 18px;">
+    <input type="hidden" name="date_range" id="transaction-date-range" value="{{ transactions_result.filters.date_range }}" />
+    <div class="transaction-filter-grid">
+      <div class="field-group">
+        <label class="field-label">关键词搜索</label>
+        <input type="text" name="keyword" value="{{ transactions_result.filters.keyword }}" placeholder="搜索类别、标签、备注" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">类别</label>
+        <select name="category">
+          <option value="">全部类别</option>
+          <option value="收入" {% if transactions_result.filters.category == '收入' %}selected{% endif %}>收入</option>
+          {% for category in category_options %}
+          <option value="{{ category }}" {% if transactions_result.filters.category == category %}selected{% endif %}>{{ category }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">交易类型</label>
+        <select name="type">
+          <option value="">全部类型</option>
+          <option value="expense" {% if transactions_result.filters.type == 'expense' %}selected{% endif %}>支出</option>
+          <option value="income" {% if transactions_result.filters.type == 'income' %}selected{% endif %}>收入</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">开始日期</label>
+        <input type="date" id="transaction-date-start" value="{{ transactions_result.filters.start_date }}" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">结束日期</label>
+        <input type="date" id="transaction-date-end" value="{{ transactions_result.filters.end_date }}" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">最小金额</label>
+        <input type="number" step="0.01" min="0" name="min_amount" value="{{ transactions_result.filters.min_amount if transactions_result.filters.min_amount is not none else '' }}" placeholder="0.00" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">最大金额</label>
+        <input type="number" step="0.01" min="0" name="max_amount" value="{{ transactions_result.filters.max_amount if transactions_result.filters.max_amount is not none else '' }}" placeholder="0.00" />
+      </div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" type="submit">应用筛选</button>
+      <a class="btn-secondary" href="/transactions">重置</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">交易表格</h2>
+      <div class="section-desc">共 {{ transactions_result.pagination.total }} 条记录，当前第 {{ transactions_result.pagination.page }} / {{ transactions_result.pagination.total_pages }} 页。</div>
+    </div>
+  </div>
+
+  {% if transactions_result["items"] %}
+  <div class="table-wrap transaction-table-wrap" style="margin-top: 18px;">
+    <table class="transaction-table">
+      <thead>
+        <tr>
+          <th>日期</th>
+          <th>类型</th>
+          <th>类别</th>
+          <th>金额</th>
+          <th>标签</th>
+          <th>备注</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in transactions_result["items"] %}
+        <tr>
+          <td class="mono">{{ item.date[5:] if item.date else '-' }}</td>
+          <td>
+            <span class="transaction-type-chip {{ 'income' if item.type == 'income' else 'expense' }}">
+              {{ '收入' if item.type == 'income' else '支出' }}
+            </span>
+          </td>
+          <td>
+            <div class="transaction-category-cell">
+              <strong>{{ item.category_sub if item.type == 'income' and item.category_sub else item.category_main or '-' }}</strong>
+              {% if item.type == 'expense' and item.category_sub %}
+              <span>{{ item.category_main }} / {{ item.category_sub }}</span>
+              {% elif item.type == 'income' %}
+              <span>{{ item.category_main }}</span>
+              {% endif %}
+            </div>
+          </td>
+          <td class="mono {{ 'income' if item.type == 'income' else 'expense' }}">¥{{ '%.2f'|format(item.amount) }}</td>
+          <td>
+            {% if item.tags %}
+            <div class="transaction-tag-list">
+              {% for tag in item.tags %}
+              <span class="transaction-tag">{{ tag }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="small">-</span>
+            {% endif %}
+          </td>
+          <td class="transaction-note-cell">{{ item.note or '-' }}</td>
+          <td>
+            <div class="budget-actions">
+              <button class="btn-secondary budget-action-btn js-transaction-edit" type="button" data-id="{{ item.id }}">编辑</button>
+              <button class="btn-secondary budget-action-btn js-transaction-delete" type="button" data-id="{{ item.id }}">删除</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="transaction-empty-state">
+    <div class="helper-text">当前筛选条件下没有交易记录。</div>
+  </div>
+  {% endif %}
+
+  <div class="transaction-pagination">
+    <div class="small">每页 20 条</div>
+    <div class="transaction-pagination-actions">
+      {% if pagination_links.prev %}
+      <a class="btn-secondary budget-action-btn" href="{{ pagination_links.prev }}">上一页</a>
+      {% else %}
+      <span class="btn-secondary budget-action-btn is-disabled">上一页</span>
+      {% endif %}
+      <span class="transaction-page-indicator">第 {{ transactions_result.pagination.page }} / {{ transactions_result.pagination.total_pages }} 页</span>
+      {% if pagination_links.next %}
+      <a class="btn-secondary budget-action-btn" href="{{ pagination_links.next }}">下一页</a>
+      {% else %}
+      <span class="btn-secondary budget-action-btn is-disabled">下一页</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="transaction-modal-shell" id="transaction-modal-shell" hidden>
+  <div class="transaction-modal-backdrop" id="transaction-modal-backdrop"></div>
+  <div class="transaction-modal panel" role="dialog" aria-modal="true" aria-labelledby="transaction-modal-title">
+    <div class="fab-panel-head">
+      <div>
+        <div class="page-eyebrow">Edit Transaction</div>
+        <h2 id="transaction-modal-title">编辑记录</h2>
+      </div>
+      <button type="button" class="fab-close" id="transaction-modal-close" aria-label="关闭">×</button>
+    </div>
+
+    <form id="transaction-edit-form" class="fab-form">
+      <input type="hidden" id="transaction-edit-id" />
+
+      <div class="field-group">
+        <label class="field-label" for="transaction-edit-amount">金额</label>
+        <input id="transaction-edit-amount" type="number" step="0.01" min="0.01" required />
+      </div>
+
+      <div class="grid-2" style="gap: 16px;">
+        <div class="field-group">
+          <label class="field-label" for="transaction-edit-type">收支类型</label>
+          <select id="transaction-edit-type">
+            <option value="expense">支出</option>
+            <option value="income">收入</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="transaction-edit-date">日期</label>
+          <input id="transaction-edit-date" type="date" required />
+        </div>
+      </div>
+
+      <div id="transaction-edit-expense-category-main" class="field-group">
+        <label class="field-label" for="transaction-edit-category-main">主类别</label>
+        <select id="transaction-edit-category-main">
+          <option value="">请选择主类别</option>
+          {% for category in category_options %}
+          <option value="{{ category }}">{{ category }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid-2" style="gap: 16px;">
+        <div id="transaction-edit-expense-category-sub" class="field-group">
+          <label class="field-label" for="transaction-edit-category-sub">子类别</label>
+          <input id="transaction-edit-category-sub" type="text" placeholder="如：外卖 / 通勤 / 书籍" />
+        </div>
+        <div id="transaction-edit-income-source" class="field-group" style="display: none;">
+          <label class="field-label" for="transaction-edit-income-source-input">收入来源</label>
+          <input id="transaction-edit-income-source-input" type="text" placeholder="如：工资 / 报销" />
+        </div>
+      </div>
+
+      <div id="transaction-edit-expense-tags" class="field-group">
+        <label class="field-label" for="transaction-edit-tags">标签</label>
+        <select id="transaction-edit-tags" multiple>
+          {% for tag in tag_options %}
+          <option value="{{ tag }}">{{ tag }}</option>
+          {% endfor %}
+        </select>
+        <div class="small">按住 Ctrl 或 Command 可多选。</div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="transaction-edit-note">备注</label>
+        <input id="transaction-edit-note" type="text" placeholder="备注、渠道或场景说明" />
+      </div>
+
+      <div class="fab-actions">
+        <span class="small fab-message" id="transaction-edit-message"></span>
+        <div class="toolbar">
+          <button class="btn-secondary" type="button" id="transaction-edit-cancel">取消</button>
+          <button class="btn" type="submit" id="transaction-edit-submit">保存修改</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (() => {
+    const records = {{ transactions_result["items"]|tojson }};
+    const recordMap = new Map(records.map((item) => [String(item.id), item]));
+    const filterForm = document.getElementById('transaction-filter-form');
+    const dateStartInput = document.getElementById('transaction-date-start');
+    const dateEndInput = document.getElementById('transaction-date-end');
+    const dateRangeInput = document.getElementById('transaction-date-range');
+    const modalShell = document.getElementById('transaction-modal-shell');
+    const modalClose = document.getElementById('transaction-modal-close');
+    const modalCancel = document.getElementById('transaction-edit-cancel');
+    const modalBackdrop = document.getElementById('transaction-modal-backdrop');
+    const editForm = document.getElementById('transaction-edit-form');
+    const editId = document.getElementById('transaction-edit-id');
+    const editAmount = document.getElementById('transaction-edit-amount');
+    const editType = document.getElementById('transaction-edit-type');
+    const editDate = document.getElementById('transaction-edit-date');
+    const editCategoryMain = document.getElementById('transaction-edit-category-main');
+    const editCategorySub = document.getElementById('transaction-edit-category-sub');
+    const editIncomeSourceWrap = document.getElementById('transaction-edit-income-source');
+    const editIncomeSource = document.getElementById('transaction-edit-income-source-input');
+    const editExpenseCategoryWrap = document.getElementById('transaction-edit-expense-category-main');
+    const editExpenseCategorySubWrap = document.getElementById('transaction-edit-expense-category-sub');
+    const editTagsWrap = document.getElementById('transaction-edit-expense-tags');
+    const editTags = document.getElementById('transaction-edit-tags');
+    const editNote = document.getElementById('transaction-edit-note');
+    const editMessage = document.getElementById('transaction-edit-message');
+    const editSubmit = document.getElementById('transaction-edit-submit');
+
+    const syncDateRange = () => {
+      const start = dateStartInput ? dateStartInput.value.trim() : '';
+      const end = dateEndInput ? dateEndInput.value.trim() : '';
+      dateRangeInput.value = start || end ? `${start},${end}` : '';
+    };
+
+    const setEditMessage = (text, isError = false) => {
+      editMessage.textContent = text || '';
+      editMessage.classList.toggle('danger', Boolean(isError));
+    };
+
+    const toggleEditFieldsByType = () => {
+      const isIncome = editType.value === 'income';
+      editExpenseCategoryWrap.style.display = isIncome ? 'none' : '';
+      editExpenseCategorySubWrap.style.display = isIncome ? 'none' : '';
+      editTagsWrap.style.display = isIncome ? 'none' : '';
+      editIncomeSourceWrap.style.display = isIncome ? '' : 'none';
+      editCategoryMain.required = !isIncome;
+      editIncomeSource.required = isIncome;
+    };
+
+    const openModal = (recordId) => {
+      const record = recordMap.get(String(recordId));
+      if (!record) {
+        return;
+      }
+
+      editId.value = record.id;
+      editAmount.value = Number(record.amount || 0).toFixed(2);
+      editType.value = record.type || 'expense';
+      editDate.value = record.date || '';
+      editCategoryMain.value = record.type === 'expense' ? (record.category_main || '') : '';
+      editCategorySub.value = record.type === 'expense' ? (record.category_sub || '') : '';
+      editIncomeSource.value = record.type === 'income' ? (record.category_sub || '') : '';
+      editNote.value = record.note || '';
+      Array.from(editTags.options).forEach((option) => {
+        option.selected = Array.isArray(record.tags) && record.tags.includes(option.value);
+      });
+
+      toggleEditFieldsByType();
+      setEditMessage('');
+      modalShell.hidden = false;
+      document.body.classList.add('modal-open');
+    };
+
+    const closeModal = () => {
+      modalShell.hidden = true;
+      document.body.classList.remove('modal-open');
+      setEditMessage('');
+    };
+
+    document.querySelectorAll('.js-transaction-edit').forEach((button) => {
+      button.addEventListener('click', () => openModal(button.dataset.id));
+    });
+
+    document.querySelectorAll('.js-transaction-delete').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const confirmed = window.confirm('确认删除该交易记录？');
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/transactions/${button.dataset.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
+          if (!response.ok) {
+            throw new Error('delete failed');
+          }
+          window.location.reload();
+        } catch (_error) {
+          window.alert('删除失败，请稍后重试。');
+        }
+      });
+    });
+
+    if (filterForm) {
+      filterForm.addEventListener('submit', () => {
+        syncDateRange();
+      });
+    }
+
+    editType.addEventListener('change', toggleEditFieldsByType);
+    modalClose.addEventListener('click', closeModal);
+    modalCancel.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modalShell.hidden) {
+        closeModal();
+      }
+    });
+
+    editForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setEditMessage('');
+      editSubmit.disabled = true;
+
+      const payload = {
+        amount: editAmount.value,
+        type: editType.value,
+        date: editDate.value,
+        note: editNote.value.trim(),
+      };
+
+      if (payload.type === 'income') {
+        payload.income_source = editIncomeSource.value.trim();
+      } else {
+        payload.category_main = editCategoryMain.value;
+        payload.category_sub = editCategorySub.value.trim();
+        payload.tags = Array.from(editTags.selectedOptions).map((option) => option.value);
+      }
+
+      try {
+        const response = await fetch(`/api/transactions/${editId.value}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || 'save failed');
+        }
+        window.location.reload();
+      } catch (error) {
+        setEditMessage(error.message || '保存失败，请稍后重试。', true);
+      } finally {
+        editSubmit.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}
