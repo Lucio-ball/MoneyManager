@@ -302,17 +302,23 @@ def get_budget_health_profile(month: str) -> dict:
     reimbursement_amount = float(execution.get("reimbursement_amount") or 0)
     net_expense = float(execution.get("net_expense") or 0)
     items = execution.get("items") or []
+    category_items = [item for item in items if item.get("category_main")]
 
     total_budget_item = next((item for item in items if item.get("category_main") is None), None)
     if total_budget_item:
+        has_total_budget = True
         execution_rate = float(total_budget_item.get("execution_rate") or 0)
         total_budget = float(total_budget_item.get("budget_amount") or 0)
+        scoped_expense = float(total_budget_item.get("actual_expense") or 0)
+        budget_scope_label = "总预算"
     else:
-        category_total_budget = sum(float(item.get("budget_amount") or 0) for item in items if item.get("category_main"))
+        has_total_budget = False
+        category_total_budget = sum(float(item.get("budget_amount") or 0) for item in category_items)
+        scoped_expense = sum(float(item.get("actual_expense") or 0) for item in category_items)
         total_budget = round(category_total_budget, 2)
-        execution_rate = round((net_expense / total_budget * 100), 2) if total_budget > 0 else 0.0
+        execution_rate = round((scoped_expense / total_budget * 100), 2) if total_budget > 0 else 0.0
+        budget_scope_label = "分类预算合计"
 
-    category_items = [item for item in items if item.get("category_main")]
     execution_component = _calculate_execution_component(execution_rate)
     deviation_component = _calculate_deviation_component(category_items)
     subscription_component = _calculate_subscription_component(month, net_expense)
@@ -421,7 +427,10 @@ def get_budget_health_profile(month: str) -> dict:
             "reimbursement_amount": round(reimbursement_amount, 2),
             "pending_reimbursement": round(float(execution.get("pending_reimbursement") or 0), 2),
             "net_expense": round(net_expense, 2),
+            "scoped_expense": round(scoped_expense, 2),
             "execution_rate": round(execution_rate, 2),
+            "has_total_budget": has_total_budget,
+            "budget_scope_label": budget_scope_label,
         },
         "category_risks": category_risks,
         "risk_hints": risk_hints,

@@ -70,7 +70,13 @@
         {{ '%.2f'|format(budget_health.score.execution_rate) }}%
       </div>
     </div>
-    <div class="section-insight">本月总预算 ¥{{ '%.2f'|format(budget_health.score.total_budget) }}，净支出 ¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }}。</div>
+    <div class="section-insight">
+      {% if budget_health.score.has_total_budget %}
+        本月总预算 ¥{{ '%.2f'|format(budget_health.score.total_budget) }}，净支出 ¥{{ '%.2f'|format(budget_data.net_expense or budget_data.gross_expense) }}。
+      {% else %}
+        已设置分类预算合计 ¥{{ '%.2f'|format(budget_health.score.total_budget) }}，相关分类净支出 ¥{{ '%.2f'|format(budget_health.score.scoped_expense) }}。
+      {% endif %}
+    </div>
   </article>
 </section>
 
@@ -83,7 +89,7 @@
   <article class="kpi-card">
     <div class="kpi-label">预算执行率</div>
     <div class="kpi-value mono">{{ '%.2f'|format(budget_health.score.execution_rate) }}%</div>
-    <div class="small">预算 ¥{{ '%.2f'|format(budget_health.score.total_budget) }}</div>
+    <div class="small">{{ budget_health.score.budget_scope_label }} ¥{{ '%.2f'|format(budget_health.score.total_budget) }}</div>
   </article>
   <article class="kpi-card">
     <div class="kpi-label">本月净支出</div>
