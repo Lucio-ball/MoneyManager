@@ -3,7 +3,6 @@
 {% block title %}MoneyManager · 新增订阅{% endblock %}
 
 {% block nav_actions %}
-{% include '_global_month_selector.html' %}
 <a class="btn-secondary" href="/subscriptions">返回订阅列表</a>
 {% endblock %}
 
@@ -12,14 +11,14 @@
   <div class="page-header-copy">
     <div class="page-eyebrow">Subscriptions</div>
     <h1 class="page-title">新增订阅</h1>
-    <div class="page-subtitle">录入周期、支付方式与分类，让后续月折算成本分析更准确。</div>
+    <div class="page-subtitle">录入周期、分类与备注，让后续月折算成本分析更准确。</div>
   </div>
 </section>
 {% endblock %}
 
 {% block content %}
 {% if success == '0' %}
-<section class="panel"><p class="msg danger">提交失败：请检查名称、金额、周期和扣费日期。</p></section>
+<section class="panel"><p class="msg danger">提交失败，请检查名称、金额、周期和扣费日期。</p></section>
 {% endif %}
 
 <section class="form-shell">
@@ -52,10 +51,6 @@
         <div class="field-group">
           <label class="field-label" for="category">分类</label>
           <input id="category" type="text" name="category" placeholder="如：效率 / 娱乐 / 云服务" />
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="payment_method">支付方式</label>
-          <input id="payment_method" type="text" name="payment_method" placeholder="如：微信 / 银行卡" />
         </div>
       </div>
       <div class="field-group">

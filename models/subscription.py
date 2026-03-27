@@ -47,6 +47,8 @@ def _create_subscription_charge_if_needed(conn, subscription: dict, billing_date
         return False
 
     transaction = _build_subscription_charge_transaction(subscription, billing_date)
+    transaction["category_main"] = "订阅"
+    transaction["category_sub"] = str(subscription.get("category") or "").strip() or "未分类"
     cursor = conn.execute(
         """
         INSERT INTO transactions (

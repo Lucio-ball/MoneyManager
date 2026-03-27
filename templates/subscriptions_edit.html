@@ -3,7 +3,6 @@
 {% block title %}MoneyManager · 编辑订阅{% endblock %}
 
 {% block nav_actions %}
-{% include '_global_month_selector.html' %}
 <a class="btn-secondary" href="/subscriptions">返回订阅列表</a>
 {% endblock %}
 
@@ -12,14 +11,14 @@
   <div class="page-header-copy">
     <div class="page-eyebrow">Subscriptions</div>
     <h1 class="page-title">编辑订阅</h1>
-    <div class="page-subtitle">优先修正金额、周期和下次扣费日期，避免月成本统计失真。</div>
+    <div class="page-subtitle">优先修正金额、周期、分类和下次扣费日期，避免月成本统计失真。</div>
   </div>
 </section>
 {% endblock %}
 
 {% block content %}
 {% if success == '0' %}
-<section class="panel"><p class="msg danger">保存失败：请检查名称、金额、周期和扣费日期。</p></section>
+<section class="panel"><p class="msg danger">保存失败，请检查名称、金额、周期和扣费日期。</p></section>
 {% endif %}
 
 <section class="form-shell">
@@ -52,10 +51,6 @@
         <div class="field-group">
           <label class="field-label" for="category">分类</label>
           <input id="category" type="text" name="category" value="{{ subscription.category if subscription.category else '' }}" />
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="payment_method">支付方式</label>
-          <input id="payment_method" type="text" name="payment_method" value="{{ subscription.payment_method if subscription.payment_method else '' }}" />
         </div>
       </div>
       <div class="field-group">
