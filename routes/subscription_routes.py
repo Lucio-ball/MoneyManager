@@ -39,11 +39,13 @@ def subscriptions_page():
         "subscriptions.html",
         active_page="subscriptions",
         month=month,
+        today=date.today().isoformat(),
         summary=summary,
         alerts=alerts,
         subscription_health=subscription_health,
         subscriptions=subscriptions,
         upcoming=upcoming,
+        cycle_options=SUBSCRIPTION_CYCLE_OPTIONS,
         cycle_labels=cycle_labels,
         success=request.args.get("success"),
     )
@@ -52,12 +54,19 @@ def subscriptions_page():
 @bp.route("/subscriptions/add", methods=["GET", "POST"], endpoint="add_subscription_page")
 def add_subscription_page():
     month = normalize_month(request.values.get("month"))
+    source = str(request.values.get("source") or "").strip()
+
+    def _redirect_after_submit(success: str):
+        if source == "subscriptions_modal":
+            return redirect(url_for("subscription_routes.subscriptions_page", month=month, success=success))
+        return redirect(url_for("subscription_routes.add_subscription_page", month=month, success=success))
+
     if request.method == "POST":
         form_payload = build_subscription_payload(request.form)
         if not form_payload:
-            return redirect(url_for("subscription_routes.add_subscription_page", month=month, success="0"))
+            return _redirect_after_submit("0")
         create_subscription(form_payload)
-        return redirect(url_for("subscription_routes.subscriptions_page", month=month, success="created"))
+        return _redirect_after_submit("created")
 
     return render_template(
         "subscriptions_add.html",

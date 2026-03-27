@@ -6,11 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
 
-{% block nav_actions %}
-{% include '_global_month_selector.html' %}
-<a class="btn-secondary" href="/">仪表盘</a>
-<a class="btn" href="/subscriptions/add">新增订阅</a>
-{% endblock %}
+{% block nav_actions %}{% endblock %}
 
 {% block page_header %}
 <section class="page-header">
@@ -25,6 +21,8 @@
 {% block content %}
 {% if success == 'created' %}
 <section class="panel"><p class="msg ok">订阅创建成功。</p></section>
+{% elif success == '0' %}
+<section class="panel"><p class="msg danger">提交失败，请检查名称、金额、周期、扣费日期和分类。</p></section>
 {% elif success == 'updated' %}
 <section class="panel"><p class="msg ok">订阅更新成功。</p></section>
 {% endif %}
@@ -48,7 +46,7 @@
   <article class="kpi-card">
     <div class="kpi-label">过期项目</div>
     <div class="kpi-value mono">{{ summary.expired_count }}</div>
-    <div class="small">建议清理失效记录</div>
+    <div class="small">建议及时清理失效记录</div>
   </article>
 </section>
 
@@ -57,7 +55,7 @@
     <div class="section-head">
       <div>
         <h2 class="section-title">续费预警</h2>
-        <div class="section-desc">把最近 7 天与 30 天的扣费提醒整理成清晰列表。</div>
+        <div class="section-desc">把最近 7 天和 30 天的扣费提醒整理成清晰列表。</div>
       </div>
     </div>
     <div class="grid-3" style="margin-top: 18px;">
@@ -90,7 +88,7 @@
           {% endfor %}
         </div>
         {% else %}
-        <div class="helper-text" style="margin-top: 14px;">未来 7 天暂无续费压力。</div>
+        <div class="helper-text" style="margin-top: 14px;">未来 7 天暂无扣费压力。</div>
         {% endif %}
       </article>
       <article class="panel panel-nested">
@@ -108,7 +106,7 @@
           {% endfor %}
         </div>
         {% else %}
-        <div class="helper-text" style="margin-top: 14px;">未来 30 天暂无续费提醒。</div>
+        <div class="helper-text" style="margin-top: 14px;">未来 30 天暂无扣费提醒。</div>
         {% endif %}
       </article>
     </div>
@@ -217,7 +215,7 @@
           {% if item.is_expired %}
           <span class="badge danger">已过期</span>
           {% elif item.is_upcoming %}
-          <span class="badge warn">7天内扣费</span>
+          <span class="badge warn">7 天内扣费</span>
           {% else %}
           <span class="badge ok">正常</span>
           {% endif %}
@@ -235,7 +233,7 @@
             <div class="category-name">状态判断</div>
             <div class="small">
               {% if item.is_upcoming %}
-              未来 7 天内到期，建议确认是否保留。
+              未来 7 天内到期，建议确认是否继续保留。
               {% elif item.is_expired %}
               当前记录已过期，如已取消可直接清理。
               {% else %}
@@ -259,8 +257,76 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="helper-text" style="margin-top: 18px;">暂无订阅，先新增一个试试。</div>
+  <div class="helper-text" style="margin-top: 18px;">暂无订阅，点击右下角加号新增一个。</div>
   {% endif %}
+</section>
+{% endblock %}
+
+{% block page_overlay %}
+<button type="button" class="fab-trigger" id="subscription-fab-trigger" aria-label="新增订阅">+</button>
+
+<section
+  class="fab-panel{% if success == '0' %} is-open{% endif %}"
+  id="subscription-fab-panel"
+  aria-hidden="{% if success == '0' %}false{% else %}true{% endif %}"
+  data-open-on-load="{% if success == '0' %}true{% else %}false{% endif %}"
+>
+  <div class="fab-panel-head">
+    <div>
+      <div class="page-eyebrow">Subscriptions</div>
+      <h2>新增订阅</h2>
+      <div class="small" style="margin-top: 8px;">快速录入订阅金额、周期、分类和续费日期。</div>
+    </div>
+    <button type="button" class="fab-close" id="subscription-fab-close" aria-label="关闭">×</button>
+  </div>
+
+  <form method="post" action="/subscriptions/add" class="fab-form" id="subscription-fab-form">
+    <input type="hidden" name="month" value="{{ month }}" />
+    <input type="hidden" name="source" value="subscriptions_modal" />
+
+    <div class="field-group">
+      <label class="field-label" for="subscription-fab-name">订阅名称</label>
+      <input id="subscription-fab-name" type="text" name="name" placeholder="如：Notion / 网易云音乐" required />
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="subscription-fab-amount">账单金额</label>
+      <input id="subscription-fab-amount" type="number" step="0.01" min="0.01" name="amount" placeholder="0.00" required />
+    </div>
+
+    <div class="grid-2" style="gap: 16px;">
+      <div class="field-group">
+        <label class="field-label" for="subscription-fab-cycle">扣费周期</label>
+        <select id="subscription-fab-cycle" name="cycle" required>
+          {% for cycle in cycle_options %}
+          <option value="{{ cycle }}" {% if cycle == 'monthly' %}selected{% endif %}>
+            {% if cycle == 'monthly' %}月付{% elif cycle == 'yearly' %}年付{% elif cycle == 'weekly' %}周付{% else %}季付{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="subscription-fab-next-billing-date">下次扣费日期</label>
+        <input id="subscription-fab-next-billing-date" type="date" name="next_billing_date" value="{{ today }}" required />
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="subscription-fab-category">分类</label>
+      <input id="subscription-fab-category" type="text" name="category" placeholder="如：效率 / 娱乐 / 云服务" />
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="subscription-fab-note">备注</label>
+      <input id="subscription-fab-note" type="text" name="note" placeholder="备注（可选）" />
+    </div>
+
+    <div class="fab-actions">
+      <span class="small fab-message">{% if success == '0' %}请修正表单后再保存。{% endif %}</span>
+      <button class="btn" type="submit">保存订阅</button>
+    </div>
+  </form>
 </section>
 {% endblock %}
 
@@ -273,4 +339,5 @@
   {{ {'summary': summary, 'subscriptions': subscriptions} | tojson }}
 </script>
 <script src="{{ url_for('static', filename='js/subscriptions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/subscription-fab.js') }}"></script>
 {% endblock %}
