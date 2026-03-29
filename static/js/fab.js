@@ -23,8 +23,6 @@
   const reimbursementBox = document.getElementById("fab-expense-reimbursement-box");
   const reimbursementLinkWrap = document.getElementById("fab-income-reimbursement-link");
   const reimbursementExpenseSelect = document.getElementById("fab-reimbursement-expense-select");
-  const reimbursementLinkAmountWrap = document.getElementById("fab-income-reimbursement-amount");
-  const reimbursementLinkAmountInput = document.getElementById("fab-reimbursement-link-amount");
 
   if (!trigger || !panel || !form) {
     return;
@@ -43,15 +41,6 @@
     return typeInput.value === "income" && incomeSourceInput.value.trim() === "报销";
   };
 
-  const syncLinkAmountPlaceholder = function () {
-    if (!reimbursementExpenseSelect || !reimbursementLinkAmountInput) {
-      return;
-    }
-    const selected = reimbursementExpenseSelect.selectedOptions[0];
-    const pendingAmount = selected ? selected.getAttribute("data-pending-amount") : "";
-    reimbursementLinkAmountInput.placeholder = pendingAmount ? `待报销金额 ${pendingAmount}` : "默认等于本次报销收入";
-  };
-
   const refreshReimbursementOptions = async function () {
     if (!reimbursementExpenseSelect) {
       return;
@@ -63,15 +52,19 @@
         return;
       }
       const rows = await response.json();
-      const options = ['<option value="">不关联</option>'];
+      const selectedIds = new Set(
+        Array.from(reimbursementExpenseSelect.selectedOptions || []).map((option) => String(option.value))
+      );
+      const options = [];
       (Array.isArray(rows) ? rows : []).forEach((expense) => {
         const categorySub = expense.category_sub ? `/${expense.category_sub}` : "";
         options.push(
-          `<option value="${expense.id}" data-pending-amount="${Number(expense.pending_amount || 0).toFixed(2)}">${expense.date} · ${expense.category_main || "其他"}${categorySub} · 待报销 ¥${Number(expense.pending_amount || 0).toFixed(2)}</option>`
+          `<option value="${expense.id}" data-pending-amount="${Number(expense.pending_amount || 0).toFixed(2)}" ${
+            selectedIds.has(String(expense.id)) ? "selected" : ""
+          }>${expense.date} · ${expense.category_main || "其他"}${categorySub} · 待报销 ¥${Number(expense.pending_amount || 0).toFixed(2)}</option>`
         );
       });
       reimbursementExpenseSelect.innerHTML = options.join("");
-      syncLinkAmountPlaceholder();
     } catch (_error) {
       // Keep server-rendered options as fallback.
     }
@@ -95,9 +88,6 @@
     if (reimbursementLinkWrap) {
       reimbursementLinkWrap.style.display = shouldShowReimbursementLink ? "" : "none";
     }
-    if (reimbursementLinkAmountWrap) {
-      reimbursementLinkAmountWrap.style.display = shouldShowReimbursementLink && reimbursementExpenseSelect && reimbursementExpenseSelect.value ? "" : "none";
-    }
 
     categoryMainInput.required = !isIncome;
     if (isIncome) {
@@ -109,10 +99,9 @@
     } else {
       incomeSourceInput.value = "";
       if (reimbursementExpenseSelect) {
-        reimbursementExpenseSelect.value = "";
-      }
-      if (reimbursementLinkAmountInput) {
-        reimbursementLinkAmountInput.value = "";
+        Array.from(reimbursementExpenseSelect.options).forEach((option) => {
+          option.selected = false;
+        });
       }
     }
 
@@ -226,10 +215,7 @@
     reimbursableCheckbox.addEventListener("change", toggleFieldsByType);
   }
   if (reimbursementExpenseSelect) {
-    reimbursementExpenseSelect.addEventListener("change", function () {
-      syncLinkAmountPlaceholder();
-      toggleFieldsByType();
-    });
+    reimbursementExpenseSelect.addEventListener("change", toggleFieldsByType);
   }
 
   document.addEventListener("keydown", (event) => {
@@ -252,10 +238,10 @@
 
     if (payload.type === "income") {
       payload.income_source = incomeSourceInput.value.trim();
-      if (isReimbursementIncome() && reimbursementExpenseSelect && reimbursementExpenseSelect.value) {
-        payload.reimbursement_expense_transaction_id = reimbursementExpenseSelect.value;
-        if (reimbursementLinkAmountInput && reimbursementLinkAmountInput.value) {
-          payload.reimbursement_link_amount = reimbursementLinkAmountInput.value;
+      if (isReimbursementIncome() && reimbursementExpenseSelect) {
+        const selectedExpenseIds = Array.from(reimbursementExpenseSelect.selectedOptions).map((option) => option.value);
+        if (selectedExpenseIds.length > 0) {
+          payload.reimbursement_expense_transaction_ids = selectedExpenseIds;
         }
       }
     } else {
@@ -289,7 +275,6 @@
       typeInput.value = "expense";
       dateInput.value = isoDate;
       toggleFieldsByType();
-      syncLinkAmountPlaceholder();
       closePanel();
       await refreshHomeRecentRecords();
     } catch (_error) {
@@ -300,5 +285,4 @@
   });
 
   toggleFieldsByType();
-  syncLinkAmountPlaceholder();
 })();

@@ -167,6 +167,46 @@ def validate_reimbursement_link_amount(
     }
 
 
+def validate_reimbursement_expense_ids(expense_transaction_ids: list[int]) -> list[dict]:
+    normalized_ids: list[int] = []
+    seen_ids: set[int] = set()
+
+    for raw_id in expense_transaction_ids:
+        expense_id = int(raw_id)
+        if expense_id in seen_ids:
+            continue
+        seen_ids.add(expense_id)
+        normalized_ids.append(expense_id)
+
+    if not normalized_ids:
+        return []
+
+    summaries: list[dict] = []
+    for expense_id in normalized_ids:
+        expense = _get_transaction(expense_id)
+        if not expense or expense.get("type") != "expense":
+            raise ValueError("expense transaction not found")
+
+        with get_connection() as conn:
+            marker = _get_marker(conn, expense_id)
+            target_amount = round(float(marker["amount"] or 0), 2) if marker else round(float(expense["amount"]), 2)
+            reimbursed_before = _get_linked_total(conn, expense_id)
+
+        remaining_amount = max(target_amount - reimbursed_before, 0.0)
+        if remaining_amount <= 0:
+            raise ValueError("expense reimbursement is already completed")
+
+        summaries.append(
+            {
+                "expense_transaction_id": expense_id,
+                "target_amount": target_amount,
+                "remaining_amount": round(remaining_amount, 2),
+            }
+        )
+
+    return summaries
+
+
 def link_reimbursement_to_expense(
     expense_transaction_id: int,
     reimbursement_transaction_id: int,
@@ -239,6 +279,71 @@ def link_reimbursement_to_expense(
         summary = _sync_marker_status(conn, expense_transaction_id)
         conn.commit()
         return summary
+
+
+def link_reimbursement_to_expenses(
+    expense_transaction_ids: list[int],
+    reimbursement_transaction_id: int,
+) -> list[dict]:
+    validated_expenses = validate_reimbursement_expense_ids(expense_transaction_ids)
+    if not validated_expenses:
+        return []
+
+    reimbursement = _get_transaction(reimbursement_transaction_id)
+    if not reimbursement or reimbursement.get("type") != "income":
+        raise ValueError("reimbursement transaction not found")
+
+    summaries: list[dict] = []
+    with get_connection() as conn:
+        for item in validated_expenses:
+            expense_transaction_id = int(item["expense_transaction_id"])
+            marker = _get_marker(conn, expense_transaction_id)
+            if not marker:
+                expense = _get_transaction(expense_transaction_id)
+                if not expense:
+                    raise ValueError("expense transaction not found")
+                conn.execute(
+                    """
+                    INSERT INTO reimbursement_links (
+                        expense_transaction_id,
+                        reimbursement_transaction_id,
+                        amount,
+                        status
+                    ) VALUES (?, NULL, ?, 'pending')
+                    """,
+                    (expense_transaction_id, round(float(expense["amount"]), 2)),
+                )
+
+            existing_link = conn.execute(
+                """
+                SELECT id
+                FROM reimbursement_links
+                WHERE expense_transaction_id = ?
+                  AND reimbursement_transaction_id = ?
+                LIMIT 1
+                """,
+                (expense_transaction_id, reimbursement_transaction_id),
+            ).fetchone()
+            if existing_link:
+                raise ValueError("reimbursement is already linked to this expense")
+
+            conn.execute(
+                """
+                INSERT INTO reimbursement_links (
+                    expense_transaction_id,
+                    reimbursement_transaction_id,
+                    amount,
+                    status
+                ) VALUES (?, ?, 0, 'pending')
+                """,
+                (expense_transaction_id, reimbursement_transaction_id),
+            )
+
+            summaries.append(_sync_marker_status(conn, expense_transaction_id))
+
+        conn.commit()
+
+    return summaries
 
 
 def list_open_reimbursable_expenses(limit: int = 100) -> list[dict]:

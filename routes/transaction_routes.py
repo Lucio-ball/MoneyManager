@@ -6,10 +6,10 @@ from flask import Blueprint, jsonify, render_template, request
 from config import CATEGORY_OPTIONS, TAG_OPTIONS
 from models.reimbursement import (
     get_month_reimbursement_progress,
-    link_reimbursement_to_expense,
+    link_reimbursement_to_expenses,
     list_open_reimbursable_expenses,
     mark_expense_as_reimbursable,
-    validate_reimbursement_link_amount,
+    validate_reimbursement_expense_ids,
 )
 from services.analysis_service import get_monthly_insights
 from services.budget_service import get_budget_execution, get_budget_health_profile
@@ -58,6 +58,38 @@ def _parse_float_arg(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_reimbursement_expense_ids(payload) -> list[int]:
+    raw_values = []
+
+    if hasattr(payload, "getlist"):
+        raw_values.extend(payload.getlist("reimbursement_expense_transaction_ids"))
+        raw_values.extend(payload.getlist("reimbursement_expense_transaction_id"))
+    elif isinstance(payload, dict):
+        value = payload.get("reimbursement_expense_transaction_ids")
+        if isinstance(value, list):
+            raw_values.extend(value)
+        elif value not in (None, ""):
+            raw_values.append(value)
+
+        single_value = payload.get("reimbursement_expense_transaction_id")
+        if isinstance(single_value, list):
+            raw_values.extend(single_value)
+        elif single_value not in (None, ""):
+            raw_values.append(single_value)
+
+    expense_ids: list[int] = []
+    seen_ids: set[int] = set()
+    for raw_value in raw_values:
+        if raw_value in (None, ""):
+            continue
+        expense_id = int(raw_value)
+        if expense_id in seen_ids:
+            continue
+        seen_ids.add(expense_id)
+        expense_ids.append(expense_id)
+    return expense_ids
 
 
 def _build_transaction_page_link(page: int, filters: dict) -> str:
@@ -182,8 +214,10 @@ def transactions_page():
 @bp.route("/api/transactions", methods=["POST"], endpoint="create_transaction_api")
 def create_transaction_api():
     payload = request.get_json(silent=True)
+    reimbursement_payload = payload
     if payload is None:
         payload = request.form.to_dict()
+        reimbursement_payload = request.form
         tags = request.form.getlist("tags")
     else:
         tags = payload.get("tags", [])
@@ -199,17 +233,11 @@ def create_transaction_api():
     if not transaction_data:
         return jsonify({"error": error or "invalid payload"}), 400
 
-    reimburse_expense_id = None
-    reimburse_link_amount = None
+    reimbursement_expense_ids: list[int] = []
 
     try:
         if transaction_data["type"] == "income" and str(transaction_data.get("category_sub") or "").strip() == "报销":
-            expense_id_raw = payload.get("reimbursement_expense_transaction_id")
-            if expense_id_raw not in (None, ""):
-                reimburse_expense_id = int(expense_id_raw)
-                link_amount_raw = payload.get("reimbursement_link_amount")
-                if link_amount_raw not in (None, ""):
-                    reimburse_link_amount = float(link_amount_raw)
+            reimbursement_expense_ids = _parse_reimbursement_expense_ids(reimbursement_payload)
     except (TypeError, ValueError):
         return jsonify({"error": "invalid reimbursement link payload"}), 400
 
@@ -222,12 +250,8 @@ def create_transaction_api():
             if target_amount - float(transaction_data["amount"]) > 0.005:
                 raise ValueError("reimbursement amount cannot exceed expense amount")
 
-        if reimburse_expense_id is not None:
-            validate_reimbursement_link_amount(
-                reimburse_expense_id,
-                float(transaction_data["amount"]),
-                reimburse_link_amount,
-            )
+        if reimbursement_expense_ids:
+            validate_reimbursement_expense_ids(reimbursement_expense_ids)
     except (TypeError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -238,8 +262,8 @@ def create_transaction_api():
         target_amount = float(target_amount_raw) if target_amount_raw not in (None, "") else float(transaction_data["amount"])
         mark_expense_as_reimbursable(created_id, target_amount)
 
-    if reimburse_expense_id is not None:
-        link_reimbursement_to_expense(reimburse_expense_id, created_id, reimburse_link_amount)
+    if reimbursement_expense_ids:
+        link_reimbursement_to_expenses(reimbursement_expense_ids, created_id)
 
     response_payload = {"id": created_id}
     if transaction_data["type"] == "income" and str(transaction_data.get("category_sub") or "").strip() == "报销":

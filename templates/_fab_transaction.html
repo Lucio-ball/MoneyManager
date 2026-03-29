@@ -5,7 +5,7 @@
     <div>
       <div class="page-eyebrow">Quick Entry</div>
       <h2>快速记账</h2>
-      <div class="small" style="margin-top: 8px;">只重构录入体验，不改现有记账逻辑与字段。</div>
+      <div class="small" style="margin-top: 8px;">优化快速录入体验，并支持报销收入关联多个待报销项。</div>
     </div>
     <button type="button" class="fab-close" id="fab-close" aria-label="关闭">×</button>
   </div>
@@ -77,20 +77,15 @@
     </div>
 
     <div id="fab-income-reimbursement-link" class="field-group" style="display: none;">
-      <label class="field-label" for="fab-reimbursement-expense-select">关联待报销支出</label>
-      <select id="fab-reimbursement-expense-select" name="reimbursement_expense_transaction_id">
-        <option value="">不关联</option>
+      <label class="field-label" for="fab-reimbursement-expense-select">关联待报销项</label>
+      <select id="fab-reimbursement-expense-select" name="reimbursement_expense_transaction_ids" multiple>
         {% for expense in fab_open_reimbursement_expenses %}
         <option value="{{ expense.id }}" data-pending-amount="{{ '%.2f'|format(expense.pending_amount) }}">
           {{ expense.date }} · {{ expense.category_main }}{% if expense.category_sub %}/{{ expense.category_sub }}{% endif %} · 待报销 ¥{{ '%.2f'|format(expense.pending_amount) }}
         </option>
         {% endfor %}
       </select>
-    </div>
-
-    <div id="fab-income-reimbursement-amount" class="field-group" style="display: none;">
-      <label class="field-label" for="fab-reimbursement-link-amount">本次关联金额</label>
-      <input id="fab-reimbursement-link-amount" type="number" step="0.01" min="0.01" name="reimbursement_link_amount" placeholder="默认等于本次报销收入" />
+      <div class="small">可多选需要对应的待报销项，按住 Ctrl 或 Command 可多选。</div>
     </div>
 
     <div class="field-group">
