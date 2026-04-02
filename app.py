@@ -1,6 +1,6 @@
 from datetime import date
 
-from flask import Flask
+from flask import Flask, request
 
 from config import CATEGORY_OPTIONS, TAG_OPTIONS
 from extensions.database import init_db
@@ -16,6 +16,7 @@ from services.subscription_service import process_due_subscription_charges
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    last_subscription_sync_day: str | None = None
 
     init_db()
 
@@ -30,7 +31,23 @@ def create_app() -> Flask:
 
     @app.before_request
     def sync_due_subscription_charges():
-        process_due_subscription_charges()
+        nonlocal last_subscription_sync_day
+
+        # Static file requests do not need subscription sync.
+        if request.endpoint == "static":
+            return
+
+        today = date.today().isoformat()
+        if last_subscription_sync_day == today:
+            return
+
+        try:
+            process_due_subscription_charges()
+            last_subscription_sync_day = today
+        except Exception:
+            app.logger.exception("subscription auto-sync failed")
+            # Do not fail user requests when auto-sync encounters transient issues.
+            return
 
     app.register_blueprint(transaction_bp)
     app.register_blueprint(budget_bp)

@@ -56,6 +56,20 @@ def _get_linked_total(conn, expense_transaction_id: int) -> float:
     return round(float(row["total"] or 0), 2)
 
 
+def _get_reimbursement_transaction_amount(conn, reimbursement_transaction_id: int) -> float:
+    row = conn.execute(
+        """
+        SELECT amount
+        FROM transactions
+        WHERE id = ?
+          AND type = 'income'
+        LIMIT 1
+        """,
+        (reimbursement_transaction_id,),
+    ).fetchone()
+    return round(float(row["amount"] or 0), 2) if row else 0.0
+
+
 def _compute_status(target_amount: float, reimbursed_amount: float) -> str:
     if reimbursed_amount <= 0:
         return "pending"
@@ -92,6 +106,89 @@ def _sync_marker_status(conn, expense_transaction_id: int) -> dict:
         "status": status,
         "progress": round((capped_reimbursed / target_amount * 100), 2) if target_amount > 0 else 0.0,
     }
+
+
+def _repair_legacy_zero_amount_links(conn) -> None:
+    reimbursement_ids = conn.execute(
+        """
+        SELECT DISTINCT reimbursement_transaction_id
+        FROM reimbursement_links
+        WHERE reimbursement_transaction_id IS NOT NULL
+          AND amount <= 0
+        ORDER BY reimbursement_transaction_id ASC
+        """
+    ).fetchall()
+
+    touched_expense_ids: set[int] = set()
+    for reimbursement_row in reimbursement_ids:
+        reimbursement_transaction_id = int(reimbursement_row["reimbursement_transaction_id"])
+        reimbursement_amount = _get_reimbursement_transaction_amount(conn, reimbursement_transaction_id)
+        if reimbursement_amount <= 0:
+            continue
+
+        link_rows = conn.execute(
+            """
+            SELECT
+                rl.id,
+                rl.expense_transaction_id,
+                rl.amount,
+                COALESCE(marker.amount, t.amount, 0) AS target_amount,
+                COALESCE((
+                    SELECT SUM(other.amount)
+                    FROM reimbursement_links other
+                    WHERE other.expense_transaction_id = rl.expense_transaction_id
+                      AND other.reimbursement_transaction_id IS NOT NULL
+                      AND other.id != rl.id
+                ), 0) AS reimbursed_elsewhere
+            FROM reimbursement_links rl
+            LEFT JOIN reimbursement_links marker
+              ON marker.expense_transaction_id = rl.expense_transaction_id
+             AND marker.reimbursement_transaction_id IS NULL
+            LEFT JOIN transactions t
+              ON t.id = rl.expense_transaction_id
+            WHERE rl.reimbursement_transaction_id = ?
+            ORDER BY rl.id ASC
+            """,
+            (reimbursement_transaction_id,),
+        ).fetchall()
+
+        allocated_total = round(
+            sum(max(round(float(row["amount"] or 0), 2), 0.0) for row in link_rows),
+            2,
+        )
+        remaining_reimbursement = max(round(reimbursement_amount - allocated_total, 2), 0.0)
+
+        for row in link_rows:
+            current_amount = round(float(row["amount"] or 0), 2)
+            if current_amount > 0:
+                continue
+
+            expense_transaction_id = int(row["expense_transaction_id"])
+            target_amount = round(float(row["target_amount"] or 0), 2)
+            reimbursed_elsewhere = round(float(row["reimbursed_elsewhere"] or 0), 2)
+            expense_remaining = max(round(target_amount - reimbursed_elsewhere, 2), 0.0)
+            allocated_amount = min(expense_remaining, remaining_reimbursement)
+
+            if allocated_amount > 0:
+                conn.execute(
+                    """
+                    UPDATE reimbursement_links
+                    SET amount = ?
+                    WHERE id = ?
+                    """,
+                    (round(allocated_amount, 2), row["id"]),
+                )
+                remaining_reimbursement = max(round(remaining_reimbursement - allocated_amount, 2), 0.0)
+            else:
+                conn.execute("DELETE FROM reimbursement_links WHERE id = ?", (row["id"],))
+
+            touched_expense_ids.add(expense_transaction_id)
+
+    for expense_transaction_id in touched_expense_ids:
+        _sync_marker_status(conn, expense_transaction_id)
+
+    if touched_expense_ids:
+        conn.commit()
 
 
 def mark_expense_as_reimbursable(expense_transaction_id: int, amount: float | None = None) -> dict:
@@ -294,8 +391,12 @@ def link_reimbursement_to_expenses(
         raise ValueError("reimbursement transaction not found")
 
     summaries: list[dict] = []
+    remaining_reimbursement = round(float(reimbursement["amount"]), 2)
     with get_connection() as conn:
         for item in validated_expenses:
+            if remaining_reimbursement <= 0:
+                break
+
             expense_transaction_id = int(item["expense_transaction_id"])
             marker = _get_marker(conn, expense_transaction_id)
             if not marker:
@@ -327,6 +428,13 @@ def link_reimbursement_to_expenses(
             if existing_link:
                 raise ValueError("reimbursement is already linked to this expense")
 
+            link_amount = round(min(float(item["remaining_amount"]), remaining_reimbursement), 2)
+            if link_amount <= 0:
+                continue
+
+            target_amount = round(float(marker["amount"] or 0), 2)
+            reimbursed_before = _get_linked_total(conn, expense_transaction_id)
+            status_after_link = _compute_status(target_amount, reimbursed_before + link_amount)
             conn.execute(
                 """
                 INSERT INTO reimbursement_links (
@@ -334,11 +442,12 @@ def link_reimbursement_to_expenses(
                     reimbursement_transaction_id,
                     amount,
                     status
-                ) VALUES (?, ?, 0, 'pending')
+                ) VALUES (?, ?, ?, ?)
                 """,
-                (expense_transaction_id, reimbursement_transaction_id),
+                (expense_transaction_id, reimbursement_transaction_id, link_amount, status_after_link),
             )
 
+            remaining_reimbursement = max(round(remaining_reimbursement - link_amount, 2), 0.0)
             summaries.append(_sync_marker_status(conn, expense_transaction_id))
 
         conn.commit()
@@ -348,6 +457,7 @@ def link_reimbursement_to_expenses(
 
 def list_open_reimbursable_expenses(limit: int = 100) -> list[dict]:
     with get_connection() as conn:
+        _repair_legacy_zero_amount_links(conn)
         rows = conn.execute(
             """
             SELECT
@@ -400,6 +510,7 @@ def list_open_reimbursable_expenses(limit: int = 100) -> list[dict]:
 
 def get_month_reimbursement_progress(month: str) -> dict:
     with get_connection() as conn:
+        _repair_legacy_zero_amount_links(conn)
         rows = conn.execute(
             """
             SELECT
@@ -464,6 +575,7 @@ def get_month_reimbursement_progress(month: str) -> dict:
 
 def get_month_pending_reimbursement_summary(month: str) -> dict:
     with get_connection() as conn:
+        _repair_legacy_zero_amount_links(conn)
         rows = conn.execute(
             """
             SELECT
@@ -514,6 +626,7 @@ def get_expense_reimbursement_map(expense_transaction_ids: list[int]) -> dict[in
 
     placeholders = ",".join("?" for _ in expense_transaction_ids)
     with get_connection() as conn:
+        _repair_legacy_zero_amount_links(conn)
         rows = conn.execute(
             f"""
             SELECT

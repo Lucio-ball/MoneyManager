@@ -1,14 +1,39 @@
 import os
 import sqlite3
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from config import DB_DIR, DB_PATH
 
 
-def get_connection() -> sqlite3.Connection:
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
     os.makedirs(DB_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    db_path_str = str(DB_PATH)
+    last_error: sqlite3.OperationalError | None = None
+    conn: sqlite3.Connection | None = None
+    for _ in range(3):
+        try:
+            conn = sqlite3.connect(db_path_str, timeout=10)
+            conn.row_factory = sqlite3.Row
+            break
+        except sqlite3.OperationalError as err:
+            last_error = err
+            time.sleep(0.2)
+
+    if conn is None:
+        path_exists = os.path.exists(db_path_str)
+        parent_exists = os.path.exists(str(DB_DIR))
+        raise sqlite3.OperationalError(
+            f"unable to open database file: path={db_path_str}, parent_exists={parent_exists}, path_exists={path_exists}, cwd={os.getcwd()}, original_error={last_error}"
+        )
+
+    try:
+        yield conn
+    finally:
+        conn.close()
+
 
 
 def init_db() -> None:
